@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- TMDB Sync Wizard Form View -->
+        <record id="view_tmdb_sync_wizard_form" model="ir.ui.view">
+            <field name="name">tmdb.movie.sync.wizard.form</field>
+            <field name="model">tmdb.movie.sync.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Sync Movies from TMDB">
+                    <group>
+                        <field name="sync_type"/>
+                        <field name="search_query" invisible="sync_type != 'search'" required="sync_type == 'search'"/>
+                        <field name="movie_id" invisible="sync_type != 'specific'" required="sync_type == 'specific'"/>
+                        <field name="limit" invisible="sync_type == 'specific'"/>
+                        <field name="page" invisible="sync_type == 'specific'"/>
+                    </group>
+                    <footer>
+                        <button name="action_sync_movies" string="Sync Movies" type="object" class="btn-primary"/>
+                        <button string="Cancel" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <!-- TMDB Sync Wizard Action -->
+        <record id="action_tmdb_sync_wizard" model="ir.actions.act_window">
+            <field name="name">Sync from TMDB</field>
+            <field name="res_model">tmdb.movie.sync.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <!-- Menu Item for Sync Wizard -->
+        <menuitem id="menu_tmdb_sync_wizard" 
+                  name="Sync from TMDB" 
+                  parent="menu_tmdb_root" 
+                  action="action_tmdb_sync_wizard" 
+                  sequence="20"/>
+    </data>
+</odoo> 
