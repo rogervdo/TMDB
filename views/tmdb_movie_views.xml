@@ -132,6 +132,7 @@
         <!-- Menu Items -->
         <menuitem id="menu_tmdb_root" 
                   name="TMDB" 
+                  web_icon="fa-film"
                   sequence="10"/>
 
         <menuitem id="menu_tmdb_movie" 

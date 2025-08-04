@@ -2,5 +2,6 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_tmdb_movie_user,tmdb.movie.user,model_tmdb_movie,base.group_user,1,1,1,1
 access_tmdb_movie_manager,tmdb.movie.manager,model_tmdb_movie,base.group_system,1,1,1,1
 access_tmdb_movie_sync_wizard_user,tmdb.movie.sync.wizard.user,model_tmdb_movie_sync_wizard,base.group_user,1,1,1,1
+access_tmdb_movie_search_wizard_user,tmdb.movie.search.wizard.user,model_tmdb_movie_search_wizard,base.group_user,1,1,1,1
 access_tmdb_genre_user,tmdb.genre.user,model_tmdb_genre,base.group_user,1,1,1,1
 access_tmdb_genre_manager,tmdb.genre.manager,model_tmdb_genre,base.group_system,1,1,1,1

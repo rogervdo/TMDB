@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- TMDB Movie Search Wizard Form View -->
+        <record id="view_tmdb_movie_search_wizard_form" model="ir.ui.view">
+            <field name="name">tmdb.movie.search.wizard.form</field>
+            <field name="model">tmdb.movie.search.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Buscar Películas">
+                    <group>
+                        <!-- Búsqueda básica -->
+                        <field name="search_query" placeholder="Título de la película..."/>
+                        
+                        <!-- Filtros con toggles -->
+                        <group string="Filtros Avanzados" col="2">
+                            <group string="Filtro por Score">
+                                <field name="filter_score"/>
+                                <field name="minscore" invisible="not filter_score"/>
+                                <field name="maxscore" invisible="not filter_score"/>
+                            </group>
+                            
+                            <group string="Filtro por Popularidad">
+                                <field name="filter_popularity"/>
+                                <field name="minpopularity" invisible="not filter_popularity"/>
+                                <field name="maxpopularity" invisible="not filter_popularity"/>
+                            </group>
+                            
+                            <group string="Filtro por Género">
+                                <field name="filter_genre"/>
+                                <field name="genre" invisible="not filter_genre"/>
+                            </group>
+                            
+                            <group string="Filtro por Año">
+                                <field name="filter_year"/>
+                                <field name="minyear" invisible="not filter_year"/>
+                                <field name="maxyear" invisible="not filter_year"/>
+                            </group>
+                        </group>
+                        
+                        <!-- Configuración de resultados -->
+                        <group string="Configuración">
+                            <field name="limit"/>
+                            <field name="page" invisible="1"/>
+                        </group>
+                    </group>
+                    
+                    <footer>
+                        <button name="search_local_movies" string="Buscar" type="object" class="btn-primary"/>
+                        <button name="action_clear_filters" string="Limpiar Filtros" type="object" class="btn-secondary"/>
+                        <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <!-- TMDB Movie Search Wizard Action -->
+        <record id="action_tmdb_movie_search_wizard" model="ir.actions.act_window">
+            <field name="name">Buscar Películas</field>
+            <field name="res_model">tmdb.movie.search.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <!-- Menu Item for Search Wizard -->
+        <menuitem id="menu_tmdb_movie_search_wizard" 
+                  name="Buscar Películas" 
+                  parent="menu_tmdb_root" 
+                  action="action_tmdb_movie_search_wizard" 
+                  sequence="12"/>
+    </data>
+</odoo>

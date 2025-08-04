@@ -31,6 +31,7 @@
         "views/tmdb_movie_search_filters.xml",
         "views/tmdb_genre_views.xml",
         "views/tmdb_sync_wizard_views.xml",
+        "views/tmdb_movie_search_wizard_views.xml",
         "security/ir.model.access.csv",
     ],
     "demo": [],
