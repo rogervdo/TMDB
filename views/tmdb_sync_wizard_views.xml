@@ -7,7 +7,10 @@
             <field name="model">tmdb.movie.sync.wizard</field>
             <field name="arch" type="xml">
                 <form string="Sync Movies from TMDB">
-                    <group>
+                    <field name="wizard_step" invisible="1"/>
+                    
+                    <!-- Configuration Step -->
+                    <group string="Sync Configuration" invisible="wizard_step != 'configure'">
                         <field name="sync_type"/>
                         <field name="search_query" invisible="sync_type != 'search'" required="sync_type == 'search'"/>
                         <field name="movie_id" invisible="sync_type != 'specific'" required="sync_type == 'specific'"/>
@@ -18,9 +21,81 @@
                         <field name="sync_only_new_genres" invisible="sync_type == 'genres_first'"/>
                     </group>
                     
+                    <!-- Preview Step -->
+                    <div invisible="wizard_step != 'preview'">
+                        <group string="Sync Preview" col="2">
+                            <group string="Summary">
+                                <field name="preview_movies_count" readonly="1"/>
+                                <field name="preview_new_movies_count" readonly="1"/>
+                                <field name="preview_existing_movies_count" readonly="1"/>
+                                <field name="preview_genres_count" readonly="1" invisible="preview_genres_count == 0"/>
+                            </group>
+                            <group string="Configuration">
+                                <field name="sync_type" readonly="1"/>
+                                <field name="search_query" readonly="1" invisible="sync_type != 'search'"/>
+                                <field name="movie_id" readonly="1" invisible="sync_type != 'specific'"/>
+                                <field name="limit" readonly="1" invisible="sync_type == 'specific' or sync_type == 'genres_first'"/>
+                                <field name="page" readonly="1" invisible="sync_type == 'specific' or sync_type == 'genres_first'"/>
+                                <field name="year_filter" readonly="1" invisible="sync_type == 'genres_first' or not year_filter"/>
+                            </group>
+                        </group>
+                        
+                        <!-- Preview Movies List -->
+                        <group string="Movies to be Synced" invisible="sync_type == 'genres_first'">
+                            <div invisible="preview_movies_count == 0">
+                                <p>
+                                    <strong>No movies found with current criteria.</strong>
+                                </p>
+                            </div>
+                            <div invisible="preview_movies_count == 0">
+                                <p>The following movies will be synchronized:</p>
+                                <field name="preview_movies_list" widget="html" nolabel="1"/>
+                            </div>
+                        </group>
+                        
+                        <!-- Genres Info -->
+                        <group string="Genres" invisible="preview_genres_count == 0">
+                            <p>
+                                <field name="preview_genres_count" readonly="1"/> genres will be synchronized.
+                            </p>
+                        </group>
+                    </div>
+                    
+                    <!-- Complete Step -->
+                    <div invisible="wizard_step != 'complete'">
+                        <group string="Synchronization Complete">
+                            <div>
+                                <p>
+                                    <i class="fa fa-check-circle text-success" style="font-size: 48px; display: block; text-align: center; margin-bottom: 20px;"/>
+                                </p>
+                                <p style="text-align: center; font-size: 16px;">
+                                    <strong>Synchronization completed successfully!</strong>
+                                </p>
+                                <p style="text-align: center;">
+                                    All movies and genres have been synchronized from TMDB.
+                                </p>
+                            </div>
+                        </group>
+                    </div>
+                    
                     <footer>
-                        <button name="action_sync_movies" string="Sync Movies" type="object" class="btn-primary"/>
-                        <button string="Cancel" class="btn-secondary" special="cancel"/>
+                        <!-- Configuration Step Buttons -->
+                        <div invisible="wizard_step != 'configure'">
+                            <button name="action_preview_sync" string="Preview Sync" type="object" class="btn-primary"/>
+                            <button string="Cancel" class="btn-secondary" special="cancel"/>
+                        </div>
+                        
+                        <!-- Preview Step Buttons -->
+                        <div invisible="wizard_step != 'preview'">
+                            <button name="action_sync_movies" string="Confirm Sync" type="object" class="btn-primary"/>
+                            <button name="action_back_to_configure" string="Back" type="object" class="btn-secondary"/>
+                            <button string="Cancel" class="btn-secondary" special="cancel"/>
+                        </div>
+                        
+                        <!-- Complete Step Buttons -->
+                        <div invisible="wizard_step != 'complete'">
+                            <button name="action_close_wizard" string="Close" type="object" class="btn-primary"/>
+                        </div>
                     </footer>
                 </form>
             </field>
