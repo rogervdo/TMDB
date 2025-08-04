@@ -20,6 +20,7 @@
     "depends": [
         "base",
         "web",
+        "contacts",
     ],
     "external_dependencies": {
         "python": ["requests"],
@@ -27,6 +28,8 @@
     "data": [
         "views/res_config_settings_views.xml",
         "views/tmdb_movie_views.xml",
+        "views/tmdb_movie_search_filters.xml",
+        "views/tmdb_genre_views.xml",
         "views/tmdb_sync_wizard_views.xml",
         "security/ir.model.access.csv",
     ],

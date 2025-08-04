@@ -3,16 +3,21 @@
     <data>
         <!-- TMDB Movie Tree View -->
         <record id="view_tmdb_movie_tree" model="ir.ui.view">
-            <field name="name">tmdb.movie.tree</field>
+            <field name="name">tmdb.movie.list</field>
             <field name="model">tmdb.movie</field>
             <field name="arch" type="xml">
                 <list string="TMDB Movies">
                     <field name="tmdb_id"/>
                     <field name="title"/>
+                    <field name="director"/>
+                    <field name="genre_ids" widget="many2many_tags"/>
                     <field name="release_date"/>
                     <field name="vote_average"/>
                     <field name="popularity"/>
                     <field name="last_sync"/>
+                    <field name="recommendation_score"/>
+                    <field name="age_category"/>
+                    <field name="popularity_category"/>
                 </list>
             </field>
         </record>
@@ -26,6 +31,10 @@
                     <header>
                         <button name="sync_from_tmdb" string="Sync from TMDB" type="object" 
                                 class="oe_highlight" invisible="tmdb_id == False"/>
+                        <button name="update_director_from_tmdb" string="Update Director" type="object" 
+                                class="btn-secondary" invisible="tmdb_id == False"/>
+                        <button name="create_director_contact_from_field" string="Create Director Contact" type="object" 
+                                class="btn-info" invisible="director == False or director_id != False"/>
                     </header>
                     <sheet>
                         <group>
@@ -33,6 +42,7 @@
                                 <field name="tmdb_id"/>
                                 <field name="title"/>
                                 <field name="original_title"/>
+                                <field name="director"/>
                                 <field name="release_date"/>
                             </group>
                             <group>
@@ -40,6 +50,11 @@
                                 <field name="vote_count"/>
                                 <field name="popularity"/>
                                 <field name="active"/>
+                            </group>
+                            <group>
+                                <field name="age_category"/>
+                                <field name="popularity_category" readonly="0"/>
+                                <field name="recommendation_score"/>
                             </group>
                         </group>
                         <group>
@@ -49,6 +64,7 @@
                             <field name="poster_path"/>
                             <field name="backdrop_path"/>
                             <field name="last_sync"/>
+                            <field name="genre_ids" widget="many2many_tags"/>
                         </group>
                     </sheet>
                 </form>
@@ -62,13 +78,26 @@
             <field name="arch" type="xml">
                 <search string="Search TMDB Movies">
                     <field name="title"/>
+                    <field name="director"/>
+                    <field name="genre_ids"/>
                     <field name="tmdb_id"/>
                     <separator/>
                     <filter string="Active" name="active" domain="[('active', '=', True)]"/>
                     <filter string="Inactive" name="inactive" domain="[('active', '=', False)]"/>
+                    <separator/>
+                    <filter string="Action" name="action_genre" domain="[('genre_ids.name', '=', 'Action')]"/>
+                    <filter string="Comedy" name="comedy_genre" domain="[('genre_ids.name', '=', 'Comedy')]"/>
+                    <filter string="Drama" name="drama_genre" domain="[('genre_ids.name', '=', 'Drama')]"/>
+                    <filter string="Horror" name="horror_genre" domain="[('genre_ids.name', '=', 'Horror')]"/>
+                    <filter string="Romance" name="romance_genre" domain="[('genre_ids.name', '=', 'Romance')]"/>
+                    <filter string="Thriller" name="thriller_genre" domain="[('genre_ids.name', '=', 'Thriller')]"/>
+                    <filter string="Sci-Fi" name="scifi_genre" domain="[('genre_ids.name', '=', 'Science Fiction')]"/>
+                    <separator/>
                     <group expand="0" string="Group By">
                         <filter string="Release Date" name="group_by_date" context="{'group_by': 'release_date:month'}"/>
                         <filter string="Vote Average" name="group_by_vote" context="{'group_by': 'vote_average'}"/>
+                        <filter string="Genre" name="group_by_genre" context="{'group_by': 'genre_ids'}"/>
+                        <filter string="Director" name="group_by_director" context="{'group_by': 'director'}"/>
                     </group>
                 </search>
             </field>
@@ -90,6 +119,16 @@
             </field>
         </record>
 
+        <!-- Sync All Directors Action -->
+        <record id="action_sync_all_directors" model="ir.actions.server">
+            <field name="name">Sync All Directors to Contacts</field>
+            <field name="model_id" ref="model_tmdb_movie"/>
+            <field name="state">code</field>
+            <field name="code">
+                action = model.sync_all_directors_to_contacts()
+            </field>
+        </record>
+
         <!-- Menu Items -->
         <menuitem id="menu_tmdb_root" 
                   name="TMDB" 
@@ -100,5 +139,11 @@
                   parent="menu_tmdb_root" 
                   action="action_tmdb_movie" 
                   sequence="10"/>
+
+        <menuitem id="menu_tmdb_sync_directors" 
+                  name="Sync Directors to Contacts" 
+                  parent="menu_tmdb_root" 
+                  action="action_sync_all_directors" 
+                  sequence="20"/>
     </data>
 </odoo> 

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Advanced Search Filters for TMDB Movies -->
+        <record id="view_tmdb_movie_advanced_search" model="ir.ui.view">
+            <field name="name">tmdb.movie.advanced.search</field>
+            <field name="model">tmdb.movie</field>
+            <field name="inherit_id" ref="view_tmdb_movie_search"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='genre_ids']" position="after">
+                    <field name="vote_average" string="Min Vote Average"/>
+                    <field name="popularity" string="Min Popularity"/>
+                    <field name="release_date" string="Release Date"/>
+                </xpath>
+                
+                <xpath expr="//filter[@name='scifi_genre']" position="after">
+                    <filter string="Adventure" name="adventure_genre" domain="[('genre_ids.name', '=', 'Adventure')]"/>
+                    <filter string="Animation" name="animation_genre" domain="[('genre_ids.name', '=', 'Animation')]"/>
+                    <filter string="Crime" name="crime_genre" domain="[('genre_ids.name', '=', 'Crime')]"/>
+                    <filter string="Documentary" name="documentary_genre" domain="[('genre_ids.name', '=', 'Documentary')]"/>
+                    <filter string="Family" name="family_genre" domain="[('genre_ids.name', '=', 'Family')]"/>
+                    <filter string="Fantasy" name="fantasy_genre" domain="[('genre_ids.name', '=', 'Fantasy')]"/>
+                    <filter string="History" name="history_genre" domain="[('genre_ids.name', '=', 'History')]"/>
+                    <filter string="Music" name="music_genre" domain="[('genre_ids.name', '=', 'Music')]"/>
+                    <filter string="Mystery" name="mystery_genre" domain="[('genre_ids.name', '=', 'Mystery')]"/>
+                    <filter string="War" name="war_genre" domain="[('genre_ids.name', '=', 'War')]"/>
+                    <filter string="Western" name="western_genre" domain="[('genre_ids.name', '=', 'Western')]"/>
+                </xpath>
+                
+                <xpath expr="//separator[last()]" position="after">
+                    <separator/>
+                    <filter string="High Rating (8+)" name="high_rating" domain="[('vote_average', '>=', 8.0)]"/>
+                    <filter string="Popular Movies (500+)" name="popular_movies" domain="[('popularity', '>=', 500)]"/>
+                    <filter string="Recent Movies (2020+)" name="recent_movies" domain="[('release_date', '>=', '2020-01-01')]"/>
+                    <filter string="Classic Movies (pre-2000)" name="classic_movies" domain="[('release_date', '&lt;', '2000-01-01')]"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Advanced Search Actions -->
+        <record id="action_search_action_movies" model="ir.actions.server">
+            <field name="name">Search Action Movies</field>
+            <field name="model_id" ref="model_tmdb_movie"/>
+            <field name="state">code</field>
+            <field name="code">
+                action = model.search_by_genre('Action')
+            </field>
+        </record>
+
+        <record id="action_search_comedy_movies" model="ir.actions.server">
+            <field name="name">Search Comedy Movies</field>
+            <field name="model_id" ref="model_tmdb_movie"/>
+            <field name="state">code</field>
+            <field name="code">
+                action = model.search_by_genre('Comedy')
+            </field>
+        </record>
+
+        <record id="action_search_high_rated_movies" model="ir.actions.server">
+            <field name="name">Search High Rated Movies (8+)</field>
+            <field name="model_id" ref="model_tmdb_movie"/>
+            <field name="state">code</field>
+            <field name="code">
+                action = model.search_by_rating_range(8.0)
+            </field>
+        </record>
+
+        <record id="action_search_popular_movies" model="ir.actions.server">
+            <field name="name">Search Popular Movies (500+)</field>
+            <field name="model_id" ref="model_tmdb_movie"/>
+            <field name="state">code</field>
+            <field name="code">
+                action = model.search_by_popularity(500)
+            </field>
+        </record>
+    </data>
+</odoo> 

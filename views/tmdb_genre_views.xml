@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- TMDB Genre Tree View -->
+        <record id="view_tmdb_genre_tree" model="ir.ui.view">
+            <field name="name">tmdb.genre.tree</field>
+            <field name="model">tmdb.genre</field>
+            <field name="arch" type="xml">
+                <list string="TMDB Genres">
+                    <field name="tmdb_genre_id"/>
+                    <field name="name"/>
+                    <field name="movie_count"/>
+                    <field name="avg_rating"/>
+                    <field name="total_popularity"/>
+                    <field name="recent_movies_count"/>
+                    <field name="high_rated_count"/>
+                    <field name="viral_movies_count"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- TMDB Movie Tree View for Genre Form -->
+        <record id="view_tmdb_movie_tree_for_genre" model="ir.ui.view">
+            <field name="name">tmdb.movie.tree.for.genre</field>
+            <field name="model">tmdb.movie</field>
+            <field name="arch" type="xml">
+                <list string="Movies">
+                    <field name="tmdb_id"/>
+                    <field name="title"/>
+                    <field name="director"/>
+                    <field name="release_date"/>
+                    <field name="vote_average"/>
+                    <field name="popularity"/>
+                    <field name="age_category"/>
+                    <field name="popularity_category"/>
+                    <field name="genre_ids" widget="many2many_tags"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- TMDB Movie Form View for Genre Form -->
+        <record id="view_tmdb_movie_form_for_genre" model="ir.ui.view">
+            <field name="name">tmdb.movie.form.for.genre</field>
+            <field name="model">tmdb.movie</field>
+            <field name="arch" type="xml">
+                <form string="Movie">
+                    <sheet>
+                        <group>
+                            <group>
+                                <field name="tmdb_id"/>
+                                <field name="title"/>
+                                <field name="original_title"/>
+                                <field name="director"/>
+                                <field name="release_date"/>
+                            </group>
+                            <group>
+                                <field name="vote_average"/>
+                                <field name="vote_count"/>
+                                <field name="popularity"/>
+                            </group>
+                        </group>
+                        <group>
+                            <field name="overview" placeholder="Movie overview..."/>
+                        </group>
+                        <group>
+                            <field name="poster_path"/>
+                            <field name="backdrop_path"/>
+                            <field name="last_sync"/>
+                            <field name="genre_ids" widget="many2many_tags"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- TMDB Genre Form View -->
+        <record id="view_tmdb_genre_form" model="ir.ui.view">
+            <field name="name">tmdb.genre.form</field>
+            <field name="model">tmdb.genre</field>
+            <field name="arch" type="xml">
+                <form string="TMDB Genre">
+                    <header>
+                        <button name="sync_genre_from_tmdb" string="Sync from TMDB" type="object" 
+                                class="oe_highlight" invisible="tmdb_genre_id == False"/>
+                        <button name="refresh_movies" string="Refresh Movies" type="object" 
+                                class="btn-secondary"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="name" placeholder="Genre Name"/>
+                            </h1>
+                        </div>
+                        <group>
+                            <group>
+                                <field name="tmdb_genre_id"/>
+                                <field name="name"/>
+                                <field name="description"/>
+                            </group>
+                            <group>
+                                <field name="movie_count" string="Total Movies" readonly="1"/>
+                                <field name="avg_rating" string="Average Rating" readonly="1"/>
+                                <field name="total_popularity" string="Total Popularity" readonly="1"/>
+                            </group>
+                        </group>
+                        <notebook>
+                            <page string="Movies" name="movies">
+                                <field name="movie_ids" 
+                                       views="view_tmdb_movie_tree_for_genre,view_tmdb_movie_form_for_genre"/>
+                            </page>
+                            <page string="Statistics" name="statistics">
+                                <group>
+                                    <group string="Movie Statistics">
+                                        <field name="movie_count" readonly="1"/>
+                                        <field name="avg_rating" readonly="1"/>
+                                        <field name="total_popularity" readonly="1"/>
+                                        <field name="recent_movies_count" readonly="1"/>
+                                        <field name="classic_movies_count" readonly="1"/>
+                                    </group>
+                                    <group string="Rating Distribution">
+                                        <field name="high_rated_count" readonly="1"/>
+                                        <field name="medium_rated_count" readonly="1"/>
+                                        <field name="low_rated_count" readonly="1"/>
+                                    </group>
+                                </group>
+                                <group string="Popularity Distribution">
+                                    <field name="viral_movies_count" readonly="1"/>
+                                    <field name="high_popularity_count" readonly="1"/>
+                                    <field name="medium_popularity_count" readonly="1"/>
+                                    <field name="low_popularity_count" readonly="1"/>
+                                </group>
+                            </page>
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- TMDB Genre Search View -->
+        <record id="view_tmdb_genre_search" model="ir.ui.view">
+            <field name="name">tmdb.genre.search</field>
+            <field name="model">tmdb.genre</field>
+            <field name="arch" type="xml">
+                <search string="Search TMDB Genres">
+                    <field name="name"/>
+                    <field name="tmdb_genre_id"/>
+                    <separator/>
+                    <filter string="Popular Genres (100+ movies)" name="popular_genres" domain="[('movie_count', '>=', 100)]"/>
+                    <filter string="High Rated Genres (7+ avg)" name="high_rated_genres" domain="[('avg_rating', '>=', 7.0)]"/>
+                    <filter string="Recent Genres (2020+ movies)" name="recent_genres" domain="[('recent_movies_count', '>', 0)]"/>
+                    <separator/>
+                    <group expand="0" string="Group By">
+                        <filter string="Movie Count" name="group_by_movie_count" context="{'group_by': 'movie_count'}"/>
+                        <filter string="Average Rating" name="group_by_avg_rating" context="{'group_by': 'avg_rating'}"/>
+                        <filter string="Total Popularity" name="group_by_popularity" context="{'group_by': 'total_popularity'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- TMDB Genre Action -->
+        <record id="action_tmdb_genre" model="ir.actions.act_window">
+            <field name="name">TMDB Genres</field>
+            <field name="res_model">tmdb.genre</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No genres found!
+                </p>
+                <p>
+                    Sync genres from TMDB to get started.
+                </p>
+            </field>
+        </record>
+
+        <!-- Genre Management Menu -->
+        <menuitem id="menu_tmdb_genre_management" 
+                  name="Genre Management" 
+                  parent="menu_tmdb_root" 
+                  sequence="15"/>
+
+        <menuitem id="menu_tmdb_genre" 
+                  name="Genres" 
+                  parent="menu_tmdb_genre_management" 
+                  action="action_tmdb_genre" 
+                  sequence="10"/>
+
+        <!-- Genre Statistics Menu -->
+        <menuitem id="menu_tmdb_genre_stats" 
+                  name="Genre Statistics" 
+                  parent="menu_tmdb_genre_management" 
+                  sequence="20"/>
+    </data>
+</odoo>

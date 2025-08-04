@@ -11,9 +11,13 @@
                         <field name="sync_type"/>
                         <field name="search_query" invisible="sync_type != 'search'" required="sync_type == 'search'"/>
                         <field name="movie_id" invisible="sync_type != 'specific'" required="sync_type == 'specific'"/>
-                        <field name="limit" invisible="sync_type == 'specific'"/>
-                        <field name="page" invisible="sync_type == 'specific'"/>
+                        <field name="limit" invisible="sync_type == 'specific' or sync_type == 'genres_first'"/>
+                        <field name="page" invisible="sync_type == 'specific' or sync_type == 'genres_first'"/>
+                        <field name="year_filter" invisible="sync_type == 'genres_first'"/>
+                        <field name="sync_genres_first" invisible="sync_type == 'genres_first'"/>
+                        <field name="sync_only_new_genres" invisible="sync_type == 'genres_first'"/>
                     </group>
+                    
                     <footer>
                         <button name="action_sync_movies" string="Sync Movies" type="object" class="btn-primary"/>
                         <button string="Cancel" class="btn-secondary" special="cancel"/>
