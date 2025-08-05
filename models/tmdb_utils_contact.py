@@ -5,7 +5,7 @@ _logger = logging.getLogger(__name__)
 
 
 class TMDBContactUtils(models.AbstractModel):
-    _name = "tmdb.contact.utils"
+    _name = "tmdb.utils.contact"
     _description = "TMDB Contact Utilities"
 
     def find_or_create_director_contact_simple(self, director_name):

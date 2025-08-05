@@ -22,3 +22,16 @@ class TMDBUtils(models.AbstractModel):
             .sudo()
             .get_param("custom_addon.tmdb_base_url", "https://api.themoviedb.org/3")
         )
+
+    @api.model
+    def get_notification(self, title, message, type_):
+        """Helper method to create notification actions"""
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": title,
+                "message": message,
+                "type": type_,
+            },
+        }

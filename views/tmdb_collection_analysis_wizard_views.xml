@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- TMDB Collection Analysis Wizard Form View -->
+        <record id="view_tmdb_collection_analysis_wizard_form" model="ir.ui.view">
+            <field name="name">tmdb.collection.analysis.wizard.form</field>
+            <field name="model">tmdb.collection.analysis.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Análisis de Colección TMDB">
+                    <!-- Configuración del Análisis -->
+                    <group string="Configuración del Análisis" col="2">
+                        <field name="analysis_type"/>
+                        <field name="is_analysis_complete" invisible="1"/>
+                        <field name="last_analysis_date" invisible="1"/>
+                    </group>
+                    
+                    <!-- Filtros de Análisis -->
+                    <group string="Filtros de Análisis" col="2">
+                        <group string="Rango de Fechas">
+                            <field name="date_from"/>
+                            <field name="date_to"/>
+                        </group>
+                        
+                        <group string="Filtros de Rating">
+                            <field name="min_rating"/>
+                            <field name="max_rating"/>
+                        </group>
+                        
+                        <group string="Filtros de Popularidad">
+                            <field name="min_popularity"/>
+                            <field name="max_popularity"/>
+                        </group>
+                    </group>
+                    
+                    <!-- Estadísticas Generales -->
+                    <group string="Estadísticas Generales" invisible="not is_analysis_complete" col="4">
+                        <field name="total_movies"/>
+                        <field name="avg_rating"/>
+                        <field name="avg_popularity"/>
+                        <field name="date_range"/>
+                    </group>
+                    
+                    <!-- Resultados del Análisis -->
+                    <notebook invisible="not is_analysis_complete">
+                        <page string="Análisis por Décadas" name="decade_analysis">
+                            <field name="decade_analysis" readonly="1" nolabel="1"/>
+                            <field name="decade_chart_data" invisible="1"/>
+                        </page>
+                        
+                        <page string="Distribución por Géneros" name="genre_analysis">
+                            <field name="genre_analysis" readonly="1" nolabel="1"/>
+                            <field name="genre_chart_data" invisible="1"/>
+                        </page>
+                        
+                        <page string="Rating vs Popularidad" name="rating_popularity_analysis">
+                            <field name="rating_popularity_analysis" readonly="1" nolabel="1"/>
+                            <field name="rating_popularity_chart_data" invisible="1"/>
+                        </page>
+                        
+                        <page string="Identificación de Vacíos" name="gaps_analysis">
+                            <field name="gaps_analysis" readonly="1" nolabel="1"/>
+                            <field name="recommended_movies" readonly="1" nolabel="1"/>
+                        </page>
+                    </notebook>
+                    
+                    <footer>
+                        <button name="action_run_analysis" 
+                                string="🔍 Ejecutar Análisis" 
+                                type="object" 
+                                class="btn-primary"
+                                invisible="is_analysis_complete"/>
+                        <button name="action_save_analysis_permanent" 
+                                string="💾 Guardar Permanente" 
+                                type="object" 
+                                class="btn-warning"
+                                invisible="not is_analysis_complete"/>
+                        <button name="action_export_analysis" 
+                                string="📊 Exportar Análisis" 
+                                type="object" 
+                                class="btn-success"
+                                invisible="not is_analysis_complete"/>
+                        <button name="action_clear_analysis" 
+                                string="🧹 Limpiar Análisis" 
+                                type="object" 
+                                class="btn-secondary"
+                                invisible="not is_analysis_complete"/>
+                        <button string="Cerrar" 
+                                class="btn-secondary" 
+                                special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <!-- TMDB Collection Analysis Wizard Action -->
+        <record id="action_tmdb_collection_analysis_wizard" model="ir.actions.act_window">
+            <field name="name">Análisis de Colección</field>
+            <field name="res_model">tmdb.collection.analysis.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <!-- Menu Item for Collection Analysis Wizard -->
+        <menuitem id="menu_tmdb_collection_analysis_wizard" 
+                  name="Análisis de Colección" 
+                  parent="menu_tmdb_root" 
+                  action="action_tmdb_collection_analysis_wizard" 
+                  sequence="13"/>
+    </data>
+</odoo> 

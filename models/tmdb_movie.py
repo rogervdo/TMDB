@@ -10,16 +10,18 @@ class TMDBMovie(models.Model):
     _name = "tmdb.movie"
     _description = "TMDB Movie"
     _order = "title"
-    _inherit = ["tmdb.utils", "tmdb.contact.utils"]
+    _inherit = ["tmdb.utils", "tmdb.utils.contact"]
 
-    # Basic fields
+    # ===== FIELDS =====
+
+    # Basic movie information
     tmdb_id = fields.Integer(string="TMDB ID", required=True, unique=True)
     title = fields.Char(string="Title", required=True)
     original_title = fields.Char(string="Original Title")
     overview = fields.Text(string="Overview")
     release_date = fields.Date(string="Release Date")
 
-    # Additional fields
+    # Movie metrics and metadata
     popularity = fields.Float(string="Popularity")
     vote_average = fields.Float(string="Vote Average")
     vote_count = fields.Integer(string="Vote Count")
@@ -27,7 +29,7 @@ class TMDBMovie(models.Model):
     backdrop_path = fields.Char(string="Backdrop Path")
     director = fields.Char(string="Director", help="Main director of the movie")
 
-    #! Campos de Relación
+    # Relationships
     genre_ids = fields.Many2many(
         "tmdb.genre",
         string="Genres",
@@ -42,7 +44,7 @@ class TMDBMovie(models.Model):
         invisible=True,  # Hidden from views but still functional
     )
 
-    #! Campos Calculados
+    # Computed fields
     recommendation_score = fields.Float(
         string="Recommendation Score",
         compute="_compute_recommendation_score",
@@ -67,52 +69,34 @@ class TMDBMovie(models.Model):
     active = fields.Boolean(string="Active", default=True)
     last_sync = fields.Datetime(string="Last Sync", default=fields.Datetime.now)
 
+    # ===== SYNC METHODS =====
+
     def sync_from_tmdb(self):
         """Button action to sync this movie from TMDB"""
         if not self.tmdb_id:
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": "Error",
-                    "message": "No TMDB ID specified for this movie.",
-                    "type": "danger",
-                },
-            }
+            return self.get_notification(
+                "Error", "No TMDB ID specified for this movie.", "danger"
+            )
 
         try:
             updated_movie = self.sync_movie_from_tmdb(self.tmdb_id)
             if updated_movie:
-                return {
-                    "type": "ir.actions.client",
-                    "tag": "display_notification",
-                    "params": {
-                        "title": "Success",
-                        "message": f'Movie "{self.title}" successfully synced from TMDB.',
-                        "type": "success",
-                    },
-                }
+                return self.get_notification(
+                    "Success",
+                    f'Movie "{self.title}" successfully synced from TMDB.',
+                    "success",
+                )
             else:
-                return {
-                    "type": "ir.actions.client",
-                    "tag": "display_notification",
-                    "params": {
-                        "title": "Error",
-                        "message": "Failed to sync movie from TMDB. Please check your API key and connection.",
-                        "type": "danger",
-                    },
-                }
+                return self.get_notification(
+                    "Error",
+                    "Failed to sync movie from TMDB. Please check your API key and connection.",
+                    "danger",
+                )
         except Exception as e:
             _logger.error(f"Error syncing movie {self.tmdb_id}: {e}")
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": "Error",
-                    "message": f"An error occurred while syncing: {str(e)}",
-                    "type": "danger",
-                },
-            }
+            return self.get_notification(
+                "Error", f"An error occurred while syncing: {str(e)}", "danger"
+            )
 
     def fetch_movie_from_tmdb(self, tmdb_id):
         """Fetch movie data from TMDB API"""
@@ -136,53 +120,20 @@ class TMDBMovie(models.Model):
     def sync_movie_from_tmdb(self, tmdb_id):
         """Sync movie data from TMDB to local database"""
         movie_data = self.fetch_movie_from_tmdb(tmdb_id)
-
         if not movie_data:
             return False
 
-        # Check if movie already exists
         existing_movie = self.search([("tmdb_id", "=", tmdb_id)])
 
-        # Fetch director information from credits
-        director = None
-        director_contact = None
-        credits_data = self.fetch_movie_credits_from_tmdb(tmdb_id)
-        if credits_data:
-            director = self.get_director_from_credits(credits_data)
-            if director:
-                director_contact = self.find_or_create_director_contact(director)
+        # Process director information
+        director, director_contact = self._process_director_info(tmdb_id)
 
-        genre_ids = []
-        if movie_data.get("genres"):
-            for genre in movie_data["genres"]:
-                genre_record = self.env["tmdb.genre"].search(
-                    [("tmdb_genre_id", "=", genre["id"])]
-                )
-                if genre_record:
-                    genre_ids.append(genre_record.id)
-                else:
-                    genre_record = self.env["tmdb.genre"].create(
-                        {"tmdb_genre_id": genre["id"], "name": genre["name"]}
-                    )
-                    genre_ids.append(genre_record.id)
+        # Process genres
+        genre_ids = self._process_genres(movie_data.get("genres", []))
 
-        # Prepare data for create/update with proper data validation
-        movie_vals = {
-            "tmdb_id": movie_data.get("id"),
-            "title": movie_data.get("title") or "",
-            "original_title": movie_data.get("original_title") or False,
-            "overview": movie_data.get("overview") or False,
-            "release_date": movie_data.get("release_date") or False,
-            "popularity": movie_data.get("popularity") or 0.0,
-            "vote_average": movie_data.get("vote_average") or 0.0,
-            "vote_count": movie_data.get("vote_count") or 0,
-            "poster_path": movie_data.get("poster_path") or False,
-            "backdrop_path": movie_data.get("backdrop_path") or False,
-            "director": director or False,
-            "director_id": director_contact.id if director_contact else False,
-            "last_sync": fields.Datetime.now(),
-            "genre_ids": [(6, 0, genre_ids)],
-        }
+        movie_vals = self._prepare_movie_values(
+            movie_data, director, director_contact, genre_ids
+        )
 
         if existing_movie:
             existing_movie.write(movie_vals)
@@ -198,22 +149,9 @@ class TMDBMovie(models.Model):
         if not api_key:
             raise ValueError("TMDB API key not configured")
 
-        # Use discover endpoint for year filtering, popular endpoint otherwise
-        if year_filter:
-            url = f"{base_url}/discover/movie"
-            start_date = f"{year_filter}-01-01"
-            end_date = f"{year_filter}-12-31"
-            params = {
-                "api_key": api_key,
-                "language": "en-US",
-                "page": page,
-                "sort_by": "popularity.desc",
-                "primary_release_date.gte": start_date,
-                "primary_release_date.lte": end_date,
-            }
-        else:
-            url = f"{base_url}/movie/popular"
-            params = {"api_key": api_key, "language": "en-US", "page": page}
+        url, params = self._build_popular_movies_url(
+            api_key, base_url, page, year_filter
+        )
 
         try:
             response = requests.get(url, params=params, timeout=10)
@@ -255,7 +193,6 @@ class TMDBMovie(models.Model):
         if not credits_data or "crew" not in credits_data:
             return None
 
-        # Look for the director in the crew
         for crew_member in credits_data["crew"]:
             if crew_member.get("job") == "Director":
                 return crew_member.get("name")
@@ -265,15 +202,9 @@ class TMDBMovie(models.Model):
     def update_director_from_tmdb(self):
         """Update director information for this movie from TMDB"""
         if not self.tmdb_id:
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": "Error",
-                    "message": "No TMDB ID specified for this movie.",
-                    "type": "danger",
-                },
-            }
+            return self.get_notification(
+                "Error", "No TMDB ID specified for this movie.", "danger"
+            )
 
         try:
             credits_data = self.fetch_movie_credits_from_tmdb(self.tmdb_id)
@@ -289,140 +220,37 @@ class TMDBMovie(models.Model):
                             else False,
                         }
                     )
-                    return {
-                        "type": "ir.actions.client",
-                        "tag": "display_notification",
-                        "params": {
-                            "title": "Success",
-                            "message": f"Director updated: {director}",
-                            "type": "success",
-                        },
-                    }
+                    return self.get_notification(
+                        "Success", f"Director updated: {director}", "success"
+                    )
                 else:
-                    return {
-                        "type": "ir.actions.client",
-                        "tag": "display_notification",
-                        "params": {
-                            "title": "Info",
-                            "message": "No director information found for this movie.",
-                            "type": "info",
-                        },
-                    }
+                    return self.get_notification(
+                        "Info", "No director information found for this movie.", "info"
+                    )
             else:
-                return {
-                    "type": "ir.actions.client",
-                    "tag": "display_notification",
-                    "params": {
-                        "title": "Error",
-                        "message": "Failed to fetch credits from TMDB.",
-                        "type": "danger",
-                    },
-                }
+                return self.get_notification(
+                    "Error", "Failed to fetch credits from TMDB.", "danger"
+                )
         except Exception as e:
             _logger.error(f"Error updating director for movie {self.tmdb_id}: {e}")
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": "Error",
-                    "message": f"An error occurred while updating director: {str(e)}",
-                    "type": "danger",
-                },
-            }
+            return self.get_notification(
+                "Error",
+                f"An error occurred while updating director: {str(e)}",
+                "danger",
+            )
 
     def sync_all_directors_to_contacts(self):
         """Sync all directors from movies to contacts"""
         synced_count = super().sync_all_directors_to_contacts(self)
-        return {
-            "type": "ir.actions.client",
-            "tag": "display_notification",
-            "params": {
-                "title": "Success",
-                "message": f"Synced {synced_count} directors to contacts.",
-                "type": "success",
-            },
-        }
+        return self.get_notification(
+            "Success", f"Synced {synced_count} directors to contacts.", "success"
+        )
 
     def create_director_contact_from_field(self):
         """Create director contact from the director field"""
         return self.create_director_contact_from_field(self)
 
-    @api.constrains("release_date")
-    def validate_date(self):
-        for record in self:
-            if record.release_date and record.release_date > fields.Date.today():
-                raise ValidationError(
-                    f"Release date cannot be in the future: {record.title} in {record.release_date}"
-                )
-
-    @api.constrains("vote_average")
-    def validate_vote_average(self):
-        for record in self:
-            if record.vote_average < 0 or record.vote_average > 10:
-                raise ValidationError(
-                    f"Vote average must be between 0 and 10: {record.title} in {record.vote_average}"
-                )
-
-    @api.constrains("vote_count")
-    def validate_vote_count(self):
-        for record in self:
-            if record.vote_count < 0:
-                raise ValidationError(
-                    f"Vote count must be greater than 0: {record.title} in {record.vote_count}"
-                )
-
-    @api.constrains("tmdb_id")
-    def validate_unique_tmdb_id(self):
-        for record in self:
-            if self.search_count([("tmdb_id", "=", record.tmdb_id)]) > 1:
-                raise ValidationError(
-                    f"TMDB ID must be unique: {record.title} in {record.tmdb_id}"
-                )
-
-    @api.depends("release_date")
-    def _compute_age_category(self):
-        for record in self:
-            category = False
-            if record.release_date:
-                today = fields.Date.today()
-                age = (
-                    (today - record.release_date).days // 365
-                    if today >= record.release_date
-                    else 0
-                )
-                if age >= 30:
-                    category = "Clasica"
-                elif 5 < age < 30:
-                    category = "Reciente"
-                elif age <= 5:
-                    category = "Nueva"
-            record.age_category = category
-
-    @api.depends("popularity")
-    def _compute_popularity_category(self):
-        for record in self:
-            category = False
-            if record.popularity:
-                if record.popularity > 500:
-                    category = "Viral"
-                elif record.popularity > 250:
-                    category = "Alta"
-                elif record.popularity > 150:
-                    category = "Media"
-                else:
-                    category = "Baja"
-            record.popularity_category = category
-
-    @api.depends("popularity", "vote_average")
-    def _compute_recommendation_score(self):
-        for record in self:
-            if record.popularity and record.vote_average:
-                record.recommendation_score = (
-                    record.popularity + record.vote_average * 100
-                ) / 100
-            else:
-                record.recommendation_score = 0
-            record.recommendation_score = round(record.recommendation_score, 2)
+    # ===== SEARCH METHODS =====
 
     def search_movies(self, query, page=1, year_filter=None):
         """Search movies on TMDB with optional year filtering"""
@@ -435,7 +263,6 @@ class TMDBMovie(models.Model):
         url = f"{base_url}/search/movie"
         params = {"api_key": api_key, "language": "en-US", "query": query, "page": page}
 
-        # Add year filtering parameters to the API call
         if year_filter:
             start_date = f"{year_filter}-01-01"
             end_date = f"{year_filter}-12-31"
@@ -487,3 +314,153 @@ class TMDBMovie(models.Model):
         else:
             domain = [("release_date", ">=", start_date)]
         return self.search(domain)
+
+    # ===== CONSTRAINTS =====
+
+    @api.constrains("release_date")
+    def validate_date(self):
+        for record in self:
+            if record.release_date and record.release_date > fields.Date.today():
+                raise ValidationError(
+                    f"Release date cannot be in the future: {record.title} in {record.release_date}"
+                )
+
+    @api.constrains("vote_average")
+    def validate_vote_average(self):
+        for record in self:
+            if record.vote_average < 0 or record.vote_average > 10:
+                raise ValidationError(
+                    f"Vote average must be between 0 and 10: {record.title} in {record.vote_average}"
+                )
+
+    @api.constrains("vote_count")
+    def validate_vote_count(self):
+        for record in self:
+            if record.vote_count < 0:
+                raise ValidationError(
+                    f"Vote count must be greater than 0: {record.title} in {record.vote_count}"
+                )
+
+    @api.constrains("tmdb_id")
+    def validate_unique_tmdb_id(self):
+        for record in self:
+            if self.search_count([("tmdb_id", "=", record.tmdb_id)]) > 1:
+                raise ValidationError(
+                    f"TMDB ID must be unique: {record.title} in {record.tmdb_id}"
+                )
+
+    # ===== COMPUTED FIELDS =====
+
+    @api.depends("release_date")
+    def _compute_age_category(self):
+        for record in self:
+            category = False
+            if record.release_date:
+                today = fields.Date.today()
+                age = (
+                    (today - record.release_date).days // 365
+                    if today >= record.release_date
+                    else 0
+                )
+                if age >= 30:
+                    category = "Clasica"
+                elif 5 < age < 30:
+                    category = "Reciente"
+                elif age <= 5:
+                    category = "Nueva"
+            record.age_category = category
+
+    @api.depends("popularity")
+    def _compute_popularity_category(self):
+        for record in self:
+            category = False
+            if record.popularity:
+                if record.popularity > 500:
+                    category = "Viral"
+                elif record.popularity > 250:
+                    category = "Alta"
+                elif record.popularity > 150:
+                    category = "Media"
+                else:
+                    category = "Baja"
+            record.popularity_category = category
+
+    @api.depends("popularity", "vote_average")
+    def _compute_recommendation_score(self):
+        for record in self:
+            if record.popularity and record.vote_average:
+                record.recommendation_score = (
+                    record.popularity + record.vote_average * 100
+                ) / 100
+            else:
+                record.recommendation_score = 0
+            record.recommendation_score = round(record.recommendation_score, 2)
+
+    # ===== PRIVATE HELPER METHODS =====
+
+    def _process_director_info(self, tmdb_id):
+        """Process director information from TMDB credits"""
+        director = None
+        director_contact = None
+        credits_data = self.fetch_movie_credits_from_tmdb(tmdb_id)
+        if credits_data:
+            director = self.get_director_from_credits(credits_data)
+            if director:
+                director_contact = self.find_or_create_director_contact(director)
+        return director, director_contact
+
+    def _process_genres(self, genres_data):
+        """Process genres data and return genre IDs"""
+        genre_ids = []
+        if genres_data:
+            for genre in genres_data:
+                genre_record = self.env["tmdb.genre"].search(
+                    [("tmdb_genre_id", "=", genre["id"])]
+                )
+                if genre_record:
+                    genre_ids.append(genre_record.id)
+                else:
+                    genre_record = self.env["tmdb.genre"].create(
+                        {"tmdb_genre_id": genre["id"], "name": genre["name"]}
+                    )
+                    genre_ids.append(genre_record.id)
+        return genre_ids
+
+    def _prepare_movie_values(self, movie_data, director, director_contact, genre_ids):
+        """Prepare movie values for create/update operations"""
+        return {
+            "tmdb_id": movie_data.get("id"),
+            "title": movie_data.get("title") or "",
+            "original_title": movie_data.get("original_title") or False,
+            "overview": movie_data.get("overview") or False,
+            "release_date": movie_data.get("release_date") or False,
+            "popularity": movie_data.get("popularity") or 0.0,
+            "vote_average": movie_data.get("vote_average") or 0.0,
+            "vote_count": movie_data.get("vote_count") or 0,
+            "poster_path": movie_data.get("poster_path") or False,
+            "backdrop_path": movie_data.get("backdrop_path") or False,
+            "director": director or False,
+            "director_id": director_contact.id if director_contact else False,
+            "last_sync": fields.Datetime.now(),
+            "genre_ids": [(6, 0, genre_ids)],
+        }
+
+    def _build_popular_movies_url(self, api_key, base_url, page, year_filter):
+        """Build URL and parameters for popular movies API call"""
+        if year_filter:
+            url = f"{base_url}/discover/movie"
+            start_date = f"{year_filter}-01-01"
+            end_date = f"{year_filter}-12-31"
+            params = {
+                "api_key": api_key,
+                "language": "en-US",
+                "page": page,
+                "sort_by": "popularity.desc",
+                "primary_release_date.gte": start_date,
+                "primary_release_date.lte": end_date,
+            }
+        else:
+            url = f"{base_url}/movie/popular"
+            params = {"api_key": api_key, "language": "en-US", "page": page}
+
+        return url, params

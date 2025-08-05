@@ -14,6 +14,8 @@
         - Movie data synchronization
         - Configuration management
         - Bulk sync operations
+        - Collection analysis tools
+        - Permanent analysis storage
     """,
     "author": "Roger Villarreal",
     "website": "https://www.hanova.consulting",
@@ -32,6 +34,9 @@
         "views/tmdb_genre_views.xml",
         "views/tmdb_sync_wizard_views.xml",
         "views/tmdb_movie_search_wizard_views.xml",
+        "views/tmdb_collection_analysis_wizard_views.xml",
+        "views/tmdb_permanent_analysis_views.xml",
+        "views/tmdb_search_result_views.xml",
         "security/ir.model.access.csv",
     ],
     "demo": [],

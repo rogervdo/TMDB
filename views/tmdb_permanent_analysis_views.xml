@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- TMDB Permanent Analysis Tree View -->
+        <record id="view_tmdb_permanent_analysis_tree" model="ir.ui.view">
+            <field name="name">tmdb.permanent.analysis.tree</field>
+            <field name="model">tmdb.permanent.analysis</field>
+            <field name="arch" type="xml">
+                <list string="Análisis Guardados">
+                    <field name="name"/>
+                    <field name="analysis_type"/>
+                    <field name="total_movies"/>
+                    <field name="avg_rating"/>
+                    <field name="avg_popularity"/>
+                    <field name="user_id"/>
+                    <field name="create_date"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- TMDB Permanent Analysis Form View -->
+        <record id="view_tmdb_permanent_analysis_form" model="ir.ui.view">
+            <field name="name">tmdb.permanent.analysis.form</field>
+            <field name="model">tmdb.permanent.analysis</field>
+            <field name="arch" type="xml">
+                <form string="Análisis Guardado">
+                    <sheet>
+                        <group>
+                            <group string="Información General">
+                                <field name="name"/>
+                                <field name="analysis_type"/>
+                                <field name="user_id"/>
+                                <field name="create_date"/>
+                            </group>
+                            
+                            <group string="Estadísticas">
+                                <field name="total_movies"/>
+                                <field name="avg_rating"/>
+                                <field name="avg_popularity"/>
+                                <field name="date_range"/>
+                            </group>
+                        </group>
+                        
+                        <group string="Filtros Utilizados">
+                            <group string="Rango de Fechas">
+                                <field name="date_from"/>
+                                <field name="date_to"/>
+                            </group>
+                            
+                            <group string="Filtros de Rating">
+                                <field name="min_rating"/>
+                                <field name="max_rating"/>
+                            </group>
+                            
+                            <group string="Filtros de Popularidad">
+                                <field name="min_popularity"/>
+                                <field name="max_popularity"/>
+                            </group>
+                        </group>
+                        
+                        <notebook>
+                            <page string="Resumen" name="summary">
+                                <field name="analysis_summary" readonly="1" nolabel="1"/>
+                            </page>
+                            
+                            <page string="Análisis por Décadas" name="decade_analysis">
+                                <field name="decade_analysis" readonly="1" nolabel="1"/>
+                            </page>
+                            
+                            <page string="Distribución por Géneros" name="genre_analysis">
+                                <field name="genre_analysis" readonly="1" nolabel="1"/>
+                            </page>
+                            
+                            <page string="Rating vs Popularidad" name="rating_popularity_analysis">
+                                <field name="rating_popularity_analysis" readonly="1" nolabel="1"/>
+                            </page>
+                            
+                            <page string="Identificación de Vacíos" name="gaps_analysis">
+                                <field name="gaps_analysis" readonly="1" nolabel="1"/>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    
+                    <footer>
+                        <button name="action_view_analysis" 
+                                string="👁️ Revisar Análisis" 
+                                type="object" 
+                                class="btn-primary"/>
+                        <button name="action_compare_with_current" 
+                                string="🔄 Comparar con Actual" 
+                                type="object" 
+                                class="btn-success"/>
+                        <button name="action_export_analysis" 
+                                string="📊 Exportar" 
+                                type="object" 
+                                class="btn-secondary"/>
+                        <button string="Cerrar" 
+                                class="btn-secondary" 
+                                special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <!-- TMDB Permanent Analysis Search View -->
+        <record id="view_tmdb_permanent_analysis_search" model="ir.ui.view">
+            <field name="name">tmdb.permanent.analysis.search</field>
+            <field name="model">tmdb.permanent.analysis</field>
+            <field name="arch" type="xml">
+                <search string="Buscar Análisis Guardados">
+                    <field name="name"/>
+                    <field name="analysis_type"/>
+                    <field name="user_id"/>
+                    <filter string="Mis Análisis" name="my_analyses" domain="[('user_id', '=', uid)]"/>
+                    <filter string="Análisis por Décadas" name="decade_analyses" domain="[('analysis_type', '=', 'decade')]"/>
+                    <filter string="Análisis por Géneros" name="genre_analyses" domain="[('analysis_type', '=', 'genre')]"/>
+                    <filter string="Análisis Completo" name="comprehensive_analyses" domain="[('analysis_type', '=', 'comprehensive')]"/>
+                    <group expand="0" string="Agrupar por">
+                        <filter string="Tipo de Análisis" name="group_by_type" context="{'group_by': 'analysis_type'}"/>
+                        <filter string="Usuario" name="group_by_user" context="{'group_by': 'user_id'}"/>
+                        <filter string="Fecha de Creación" name="group_by_date" context="{'group_by': 'create_date:month'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- TMDB Permanent Analysis Action -->
+        <record id="action_tmdb_permanent_analysis" model="ir.actions.act_window">
+            <field name="name">Análisis Guardados</field>
+            <field name="res_model">tmdb.permanent.analysis</field>
+            <field name="view_mode">list,form</field>
+            <field name="search_view_id" ref="view_tmdb_permanent_analysis_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No hay análisis guardados aún
+                </p>
+                <p>
+                    Ejecuta un análisis desde el wizard y guárdalo para verlo aquí.
+                </p>
+            </field>
+        </record>
+
+        <!-- Menu Item for Permanent Analysis -->
+        <menuitem id="menu_tmdb_permanent_analysis" 
+                  name="Análisis Guardados" 
+                  parent="menu_tmdb_root" 
+                  action="action_tmdb_permanent_analysis" 
+                  sequence="14"/>
+    </data>
+</odoo> 

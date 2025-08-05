@@ -7,7 +7,11 @@ class TMDBMovieSearchWizard(models.TransientModel):
     _description = "TMDB Movie Search Wizard"
 
     search_query = fields.Char(string="Search Query")
-    limit = fields.Integer(string="Limit", default=20)
+    limit = fields.Integer(
+        string="Total Results",
+        default=100,
+        help="Maximum number of results to fetch from TMDB (will automatically fetch multiple pages)",
+    )
     page = fields.Integer(string="Page", default=1)
     genre = fields.Many2one(
         "tmdb.genre",
@@ -79,8 +83,8 @@ class TMDBMovieSearchWizard(models.TransientModel):
     @api.constrains("limit")
     def _check_limit(self):
         for record in self:
-            if record.limit and (record.limit < 1 or record.limit > 100):
-                raise UserError("Limit must be between 1 and 100")
+            if record.limit and (record.limit < 1 or record.limit > 1000):
+                raise UserError("Total results must be between 1 and 1000")
 
     def _build_score_domain(self):
         domain = []
@@ -172,11 +176,178 @@ class TMDBMovieSearchWizard(models.TransientModel):
         return {
             "type": "ir.actions.act_window",
             "res_model": "tmdb.movie",
-            "res_id": movies.ids[0] if movies else False,
             "view_mode": "list,form",
             "domain": [("id", "in", movies.ids)],
-            "name": f"Resultados de búsqueda ({len(movies)} películas)",
+            "name": f"Resultados de búsqueda local ({len(movies)} películas)",
             "target": "current",
+        }
+
+    def search_tmdb_movies(self):
+        """Busca películas en TMDB usando el endpoint Discover con paginación automática"""
+        movie_model = self.env["tmdb.movie"]
+        api_key = movie_model.get_tmdb_api_key()
+        base_url = movie_model.get_tmdb_base_url()
+
+        if not api_key:
+            raise UserError("TMDB API key not configured")
+
+        all_movies_data = []
+        current_page = 1
+        max_pages = 50  # Limitar a 50 páginas para evitar bucles infinitos
+        total_available = 0
+
+        while len(all_movies_data) < self.limit and current_page <= max_pages:
+            # Decidir endpoint basado en si hay query de texto
+            if self.search_query:
+                # Para búsqueda por texto, usar search endpoint
+                url = f"{base_url}/search/movie"
+                params = {
+                    "api_key": api_key,
+                    "language": "en-US",
+                    "query": self.search_query,
+                    "page": current_page,
+                }
+            else:
+                # Para filtros avanzados, usar discover endpoint
+                url = f"{base_url}/discover/movie"
+                params = {
+                    "api_key": api_key,
+                    "language": "en-US",
+                    "page": current_page,
+                    "sort_by": "popularity.desc",  # Ordenar por popularidad por defecto
+                }
+
+            # Mapear filtros del wizard a parámetros TMDB
+            self._add_tmdb_filters(params)
+
+            try:
+                import requests
+
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+
+                movies_data = data.get("results", [])
+                total_available = data.get("total_results", 0)
+
+                if not movies_data:
+                    # No hay más resultados en esta página
+                    break
+
+                # Aplicar filtros que TMDB no soporta directamente (popularidad)
+                filtered_movies = self._apply_client_side_filters(movies_data)
+
+                all_movies_data.extend(filtered_movies)
+
+                # Si hemos alcanzado el total de páginas disponibles, parar
+                total_pages = data.get("total_pages", 1)
+                if current_page >= total_pages:
+                    break
+
+                current_page += 1
+
+            except requests.exceptions.RequestException as e:
+                if current_page == 1:
+                    # Si es el primer error, lanzar la excepción
+                    raise UserError(f"Error searching TMDB: {str(e)}")
+                else:
+                    # Si hay error en páginas posteriores, usar lo que tenemos
+                    break
+            except Exception as e:
+                if current_page == 1:
+                    raise UserError(f"An error occurred: {str(e)}")
+                else:
+                    break
+
+        # Aplicar el límite final
+        final_movies_data = all_movies_data[: self.limit]
+
+        if not final_movies_data:
+            raise UserError("No movies found with the specified criteria.")
+
+        # Mostrar resultados
+        return self._show_tmdb_results(final_movies_data, total_available)
+
+    def _add_tmdb_filters(self, params):
+        """Mapea los filtros del wizard a parámetros TMDB"""
+
+        # Filtros de fecha/año → primary_release_date
+        if self.filter_year:
+            if self.minyear:
+                params["primary_release_date.gte"] = f"{self.minyear}-01-01"
+            if self.maxyear:
+                params["primary_release_date.lte"] = f"{self.maxyear}-12-31"
+
+        # Filtros de score → vote_average
+        if self.filter_score:
+            if self.minscore:
+                params["vote_average.gte"] = self.minscore
+            if self.maxscore:
+                params["vote_average.lte"] = self.maxscore
+
+        # Filtros de género → with_genres
+        if self.filter_genre and self.genre:
+            params["with_genres"] = self.genre.tmdb_genre_id
+
+        # Nota: Popularidad se filtra del lado cliente porque TMDB no tiene min/max popularity
+
+    def _apply_client_side_filters(self, movies_data):
+        """Aplica filtros que TMDB no soporta directamente"""
+
+        if not self.filter_popularity:
+            return movies_data
+
+        filtered_movies = []
+        for movie in movies_data:
+            popularity = movie.get("popularity", 0.0)
+
+            # Verificar filtro mínimo de popularidad
+            if self.minpopularity and popularity < self.minpopularity:
+                continue
+
+            # Verificar filtro máximo de popularidad
+            if self.maxpopularity and popularity > self.maxpopularity:
+                continue
+
+            filtered_movies.append(movie)
+
+        return filtered_movies
+
+    def _show_tmdb_results(self, movies_data, total_results):
+        """Muestra los resultados de TMDB en una vista tree profesional"""
+
+        # Crear registros transient con los resultados
+        result_model = self.env["tmdb.search.result"]
+        result_ids = result_model.create_from_tmdb_data(movies_data, wizard_id=self.id)
+
+        # Retornar acción para mostrar los resultados en vista tree
+        return {
+            "type": "ir.actions.act_window",
+            "name": f"🎬 Resultados TMDB ({len(movies_data)} de {total_results})",
+            "res_model": "tmdb.search.result",
+            "view_mode": "list,form",
+            "domain": [("id", "in", result_ids)],
+            "context": {
+                "create": False,
+                "edit": False,
+                "delete": False,
+            },
+            "target": "current",  # Abrir en la ventana principal
+            "help": """
+                <p class="o_view_nocontent_smiling_face">
+                    🎬 Resultados de búsqueda TMDB
+                </p>
+                <p>
+                    <strong>Total encontradas:</strong> {total_results} películas<br/>
+                    <strong>Mostrando:</strong> {showing} películas
+                </p>
+                <p>
+                    💡 <strong>Acciones disponibles:</strong><br/>
+                    • 🔄 <strong>Sincronizar:</strong> Agregar película a tu BD local<br/>
+                    • 👁️ <strong>Ver:</strong> Abrir película ya sincronizada<br/>
+                    • 🔄 <strong>Actualizar:</strong> Actualizar datos desde TMDB
+                </p>
+            """.format(total_results=total_results, showing=len(movies_data)),
         }
 
     def action_clear_filters(self):

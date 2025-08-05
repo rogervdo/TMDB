@@ -45,8 +45,9 @@
                     </group>
                     
                     <footer>
-                        <button name="search_local_movies" string="Buscar" type="object" class="btn-primary"/>
-                        <button name="action_clear_filters" string="Limpiar Filtros" type="object" class="btn-secondary"/>
+                        <button name="search_local_movies" string="🗃️ Buscar en BD Local" type="object" class="btn-primary"/>
+                        <button name="search_tmdb_movies" string="🔍 Buscar en TMDB" type="object" class="btn-success"/>
+                        <button name="action_clear_filters" string="🧹 Limpiar Filtros" type="object" class="btn-secondary"/>
                         <button string="Cancelar" class="btn-secondary" special="cancel"/>
                     </footer>
                 </form>

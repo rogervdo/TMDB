@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- TMDB Search Results Search View -->
+        <record id="view_tmdb_search_result_search" model="ir.ui.view">
+            <field name="name">tmdb.search.result.search</field>
+            <field name="model">tmdb.search.result</field>
+            <field name="arch" type="xml">
+                <search string="Search TMDB Results">
+                    <field name="title"/>
+                    <field name="year"/>
+                    <field name="vote_average"/>
+                    <separator/>
+                    <filter string="Not in Local DB" name="not_in_local" domain="[('exists_in_local', '=', False)]"/>
+                    <filter string="Already in Local DB" name="in_local" domain="[('exists_in_local', '=', True)]"/>
+                    <separator/>
+                    <filter string="High Rating (8+)" name="high_rating" domain="[('vote_average', '>=', 8.0)]"/>
+                    <filter string="Popular (500+)" name="popular" domain="[('popularity', '>=', 500)]"/>
+                    <separator/>
+                    <group expand="0" string="Group By">
+                        <filter string="Year" name="group_by_year" context="{'group_by': 'year'}"/>
+                        <filter string="Status" name="group_by_status" context="{'group_by': 'status_display'}"/>
+                        <filter string="Rating Range" name="group_by_rating" context="{'group_by': 'vote_average'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- TMDB Search Results Tree View -->
+        <record id="view_tmdb_search_result_tree" model="ir.ui.view">
+            <field name="name">tmdb.search.result.tree</field>
+            <field name="model">tmdb.search.result</field>
+            <field name="arch" type="xml">
+                <list string="TMDB Search Results" create="false" edit="false" delete="false" default_order="popularity desc,vote_average desc">
+                    <header>
+                        <button name="action_sync_all_new_movies" 
+                                string="🚀 Sincronizar Todas las Nuevas" 
+                                type="object" 
+                                class="btn-primary"
+                                confirm="¿Sincronizar todas las películas que no están en tu base de datos local?"/>
+                    </header>
+                    
+                    <field name="tmdb_id"/>
+                    <field name="title"/>
+                    <field name="year"/>
+                    <field name="vote_average" widget="progressbar"/>
+                    <field name="popularity"/>
+                    <field name="status_display"/>
+                    <field name="exists_in_local" invisible="1"/>
+                    
+                    <!-- Botón para sincronizar película individual -->
+                    <button name="action_sync_movie" 
+                            string="🔄 Sincronizar" 
+                            type="object" 
+                            class="btn-success"
+                            invisible="exists_in_local == True"
+                            confirm="¿Sincronizar esta película desde TMDB?"/>
+                    
+                    <!-- Botón para ver película en BD local -->
+                    <button name="action_view_movie" 
+                            string="👁️ Ver" 
+                            type="object" 
+                            class="btn-primary"
+                            invisible="exists_in_local == False"/>
+                    
+                    <!-- Botón para actualizar película existente -->
+                    <button name="action_sync_movie" 
+                            string="🔄 Actualizar" 
+                            type="object" 
+                            class="btn-warning"
+                            invisible="exists_in_local == False"
+                            confirm="¿Actualizar esta película desde TMDB?"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- TMDB Search Results Form View -->
+        <record id="view_tmdb_search_result_form" model="ir.ui.view">
+            <field name="name">tmdb.search.result.form</field>
+            <field name="model">tmdb.search.result</field>
+            <field name="arch" type="xml">
+                <form string="TMDB Movie Result" create="false" edit="false" delete="false">
+                    <header>
+                        <button name="action_sync_movie" 
+                                string="🔄 Sincronizar desde TMDB" 
+                                type="object" 
+                                class="btn-primary"
+                                invisible="exists_in_local == True"/>
+                        
+                        <button name="action_view_movie" 
+                                string="👁️ Ver en BD Local" 
+                                type="object" 
+                                class="btn-success"
+                                invisible="exists_in_local == False"/>
+                        
+                        <button name="action_sync_movie" 
+                                string="🔄 Actualizar desde TMDB" 
+                                type="object" 
+                                class="btn-warning"
+                                invisible="exists_in_local == False"/>
+                    </header>
+                    
+                    <sheet>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="title" readonly="1"/>
+                            </h1>
+                            <h2 invisible="not original_title">
+                                <field name="original_title" readonly="1"/>
+                            </h2>
+                        </div>
+                        
+                        <group>
+                            <group string="Información Básica">
+                                <field name="tmdb_id" readonly="1"/>
+                                <field name="year" readonly="1"/>
+                                <field name="release_date" readonly="1"/>
+                                <field name="status_display" readonly="1"/>
+                            </group>
+                            
+                            <group string="Ratings y Popularidad">
+                                <field name="vote_average" readonly="1" widget="progressbar"/>
+                                <field name="vote_count" readonly="1"/>
+                                <field name="popularity" readonly="1"/>
+                            </group>
+                        </group>
+                        
+                        <group string="Descripción" invisible="not overview">
+                            <field name="overview" readonly="1" nolabel="1"/>
+                        </group>
+                        
+                        <group string="Información Técnica" invisible="1">
+                            <field name="poster_path" readonly="1"/>
+                            <field name="backdrop_path" readonly="1"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- TMDB Search Results Action -->
+        <record id="action_tmdb_search_results" model="ir.actions.act_window">
+            <field name="name">TMDB Search Results</field>
+            <field name="res_model">tmdb.search.result</field>
+            <field name="view_mode">list,form</field>
+            <field name="context">{}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No search results found!
+                </p>
+                <p>
+                    Use the search wizard to find movies from TMDB.
+                </p>
+            </field>
+        </record>
+
+        <!-- Enhanced Action with Header Buttons -->
+        <record id="action_tmdb_search_results_with_actions" model="ir.actions.act_window">
+            <field name="name">TMDB Search Results</field>
+            <field name="res_model">tmdb.search.result</field>
+            <field name="view_mode">list,form</field>
+            <field name="context">{
+                'create': False,
+                'edit': False,
+                'delete': False,
+            }</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    🎬 No search results found!
+                </p>
+                <p>
+                    Use the <strong>TMDB Search Wizard</strong> to find movies from TMDB database.
+                </p>
+                <p>
+                    Configure your filters and click "🔍 Search in TMDB" to see results here.
+                </p>
+            </field>
+        </record>
+
+        <!-- Server Action for Bulk Sync -->
+        <record id="action_sync_all_tmdb_results" model="ir.actions.server">
+            <field name="name">🔄 Sync All to Local DB</field>
+            <field name="model_id" ref="model_tmdb_search_result"/>
+            <field name="binding_model_id" ref="model_tmdb_search_result"/>
+            <field name="state">code</field>
+            <field name="code">
+# Get selected records or all visible records
+if records:
+    result = records.action_sync_all_visible()
+    if result:
+        action = result
+else:
+    action = {
+        'type': 'ir.actions.client',
+        'tag': 'display_notification',
+        'params': {
+            'title': 'Info',
+            'message': 'No records selected.',
+            'type': 'info',
+        }
+    }
+            </field>
+        </record>
+    </data>
+</odoo>
