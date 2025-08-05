@@ -73,15 +73,6 @@
                                 string="📊 Verificar Datos Disponibles" 
                                 type="object" 
                                 class="btn-info"/>
-                        <button name="action_debug_wizard_state" 
-                                string="🔍 Debug Estado del Wizard" 
-                                type="object" 
-                                class="btn-info"/>
-                        <button name="action_test_save_analysis" 
-                                string="💾 Probar Guardado" 
-                                type="object" 
-                                class="btn-secondary"
-                                invisible="not is_analysis_complete"/>
                         <button name="action_save_analysis_permanent" 
                                 string="💾 Guardar Permanente" 
                                 type="object" 

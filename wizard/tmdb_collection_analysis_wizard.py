@@ -1,7 +1,7 @@
 from odoo import models, fields, api
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from collections import defaultdict
 
 _logger = logging.getLogger(__name__)
@@ -11,21 +11,31 @@ class TMDBCollectionAnalysisWizard(models.TransientModel):
     _name = "tmdb.collection.analysis.wizard"
     _description = "TMDB Collection Analysis Wizard"
 
-    # ===== CAMPOS DE CONFIGURACIÓN =====
+    # ===== CONSTANTS =====
+    ANALYSIS_TYPES = [
+        ("decade", "Análisis por Décadas"),
+        ("genre", "Distribución por Géneros"),
+        ("rating_vs_popularity", "Calificaciones vs Popularidad"),
+        ("gaps", "Identificación de Vacíos"),
+        ("comprehensive", "Análisis Completo"),
+    ]
+
+    HIGH_RATING_THRESHOLD = 7.0
+    HIGH_POPULARITY_THRESHOLD = 200.0
+    MINIMAL_MOVIE_THRESHOLD = 3
+    DEFAULT_YEARS_BACK = 10 * 365  # 10 years in days
+
+    # ===== FIELDS =====
+
+    # Configuration fields
     analysis_type = fields.Selection(
-        [
-            ("decade", "Análisis por Décadas"),
-            ("genre", "Distribución por Géneros"),
-            ("rating_vs_popularity", "Calificaciones vs Popularidad"),
-            ("gaps", "Identificación de Vacíos"),
-            ("comprehensive", "Análisis Completo"),
-        ],
+        ANALYSIS_TYPES,
         string="Tipo de Análisis",
         default="comprehensive",
         required=True,
     )
 
-    # ===== FILTROS DE ANÁLISIS =====
+    # Filter fields
     date_from = fields.Date(string="Fecha Desde", default=fields.Date.today)
     date_to = fields.Date(string="Fecha Hasta", default=fields.Date.today)
     min_rating = fields.Float(string="Rating Mínimo", default=0.0)
@@ -33,19 +43,17 @@ class TMDBCollectionAnalysisWizard(models.TransientModel):
     min_popularity = fields.Float(string="Popularidad Mínima", default=0.0)
     max_popularity = fields.Float(string="Popularidad Máxima", default=1000.0)
 
-    # ===== CAMPOS DE RESULTADOS =====
-
-    # Análisis por Décadas
+    # Result fields - Decade Analysis
     decade_analysis = fields.Text(string="Análisis por Décadas", readonly=True)
     decade_chart_data = fields.Text(
         string="Datos de Gráfico por Décadas", readonly=True
     )
 
-    # Distribución por Géneros
+    # Result fields - Genre Distribution
     genre_analysis = fields.Text(string="Análisis por Géneros", readonly=True)
     genre_chart_data = fields.Text(string="Datos de Gráfico por Géneros", readonly=True)
 
-    # Calificaciones vs Popularidad
+    # Result fields - Rating vs Popularity
     rating_popularity_analysis = fields.Text(
         string="Análisis Rating vs Popularidad", readonly=True
     )
@@ -53,11 +61,11 @@ class TMDBCollectionAnalysisWizard(models.TransientModel):
         string="Datos de Gráfico Rating vs Popularidad", readonly=True
     )
 
-    # Identificación de Vacíos
+    # Result fields - Collection Gaps
     gaps_analysis = fields.Text(string="Análisis de Vacíos", readonly=True)
     recommended_movies = fields.Text(string="Películas Recomendadas", readonly=True)
 
-    # ===== ESTADÍSTICAS GENERALES =====
+    # General statistics
     total_movies = fields.Integer(string="Total de Películas", readonly=True)
     avg_rating = fields.Float(string="Rating Promedio", readonly=True, digits=(3, 2))
     avg_popularity = fields.Float(
@@ -65,88 +73,116 @@ class TMDBCollectionAnalysisWizard(models.TransientModel):
     )
     date_range = fields.Char(string="Rango de Fechas", readonly=True)
 
-    # ===== CAMPOS DE CONTROL =====
+    # Control fields
     is_analysis_complete = fields.Boolean(string="Análisis Completado", default=False)
     last_analysis_date = fields.Datetime(string="Último Análisis", readonly=True)
 
-    # ===== MÉTODOS DE ANÁLISIS =====
+    # ===== CONSTRAINTS =====
+
+    @api.constrains("date_from", "date_to")
+    def _check_date_range(self):
+        """Validate that date_from is not after date_to"""
+        for record in self:
+            if (
+                record.date_from
+                and record.date_to
+                and record.date_from > record.date_to
+            ):
+                raise ValidationError(
+                    "La fecha desde no puede ser posterior a la fecha hasta"
+                )
+
+    @api.constrains("min_rating", "max_rating")
+    def _check_rating_range(self):
+        """Validate rating range is valid"""
+        for record in self:
+            if record.min_rating < 0 or record.max_rating > 10:
+                raise ValidationError("El rating debe estar entre 0 y 10")
+            if record.min_rating > record.max_rating:
+                raise ValidationError(
+                    "El rating mínimo no puede ser mayor que el rating máximo"
+                )
+
+    @api.constrains("min_popularity", "max_popularity")
+    def _check_popularity_range(self):
+        """Validate popularity range is valid"""
+        for record in self:
+            if record.min_popularity < 0:
+                raise ValidationError("La popularidad no puede ser negativa")
+            if record.min_popularity > record.max_popularity:
+                raise ValidationError(
+                    "La popularidad mínima no puede ser mayor que la popularidad máxima"
+                )
+
+    # ===== DEFAULT VALUES =====
 
     @api.model
     def default_get(self, fields_list):
-        """Configuración por defecto del wizard"""
+        """Set default configuration for the wizard"""
         res = super().default_get(fields_list)
 
-        # Establecer fechas por defecto (últimos 10 años)
+        # Set default dates (last 10 years)
         today = fields.Date.today()
-        res["date_from"] = today - timedelta(days=3650)  # 10 años atrás
+        res["date_from"] = today - timedelta(days=self.DEFAULT_YEARS_BACK)
         res["date_to"] = today
 
         return res
 
+    # ===== MAIN ANALYSIS METHODS =====
+
     def action_run_analysis(self):
-        """Ejecuta el análisis según el tipo seleccionado"""
+        """Execute analysis according to selected type"""
         try:
-            # Verificar que hay películas disponibles
+            # Verify movies are available
             movies_count = self.env["tmdb.movie"].search_count([("active", "=", True)])
             if movies_count == 0:
                 raise UserError(
-                    "No hay películas disponibles para analizar. Sincronice películas desde TMDB primero."
+                    "No movies available for analysis. Please sync movies from TMDB first."
                 )
 
-            _logger.info(f"Iniciando análisis de tipo: {self.analysis_type}")
+            _logger.info(f"Starting analysis of type: {self.analysis_type}")
 
-            # Obtener películas filtradas para estadísticas generales
+            # Get filtered movies for general statistics
             movies = self._get_filtered_movies()
 
-            # Actualizar estadísticas generales para todos los tipos de análisis
-            self.total_movies = len(movies)
-            self.avg_rating = (
-                sum(m.vote_average for m in movies) / len(movies) if movies else 0
-            )
-            self.avg_popularity = (
-                sum(m.popularity for m in movies) / len(movies) if movies else 0
-            )
-            self.date_range = f"{self.date_from} - {self.date_to}"
+            # Update general statistics for all analysis types
+            self._update_general_statistics(movies)
 
-            if self.analysis_type == "decade":
-                self._analyze_by_decades(movies)
-            elif self.analysis_type == "genre":
-                self._analyze_by_genres(movies)
-            elif self.analysis_type == "rating_vs_popularity":
-                self._analyze_rating_vs_popularity(movies)
-            elif self.analysis_type == "gaps":
-                self._analyze_collection_gaps(movies)
-            elif self.analysis_type == "comprehensive":
-                self._run_comprehensive_analysis(movies)
+            # Execute specific analysis based on type
+            analysis_methods = {
+                "decade": self._analyze_by_decades,
+                "genre": self._analyze_by_genres,
+                "rating_vs_popularity": self._analyze_rating_vs_popularity,
+                "gaps": self._analyze_collection_gaps,
+                "comprehensive": self._run_comprehensive_analysis,
+            }
+
+            analysis_method = analysis_methods.get(self.analysis_type)
+            if analysis_method:
+                analysis_method(movies)
 
             self.is_analysis_complete = True
             self.last_analysis_date = fields.Datetime.now()
 
             _logger.info(
-                f"Análisis completado exitosamente. Películas analizadas: {self.total_movies}"
+                f"Analysis completed successfully. Movies analyzed: {self.total_movies}"
             )
 
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": "Análisis Completado",
-                    "message": f'Análisis de tipo "{self.analysis_type}" completado exitosamente. Películas analizadas: {self.total_movies}. Ahora puede guardar el análisis.',
-                    "type": "success",
-                },
-            }
+            return self._get_success_notification(
+                "Analysis Complete",
+                f'Analysis type "{self.analysis_type}" completed successfully. '
+                f"Movies analyzed: {self.total_movies}. You can now save the analysis.",
+            )
 
         except Exception as e:
-            _logger.error(f"Error en análisis de colección: {str(e)}")
-            raise UserError(f"Error durante el análisis: {str(e)}")
+            _logger.error(f"Error in collection analysis: {str(e)}")
+            raise UserError(f"Error during analysis: {str(e)}")
 
     def _get_filtered_movies(self):
-        """Obtiene las películas filtradas según los criterios del wizard"""
-        domain = [
-            ("active", "=", True),
-        ]
+        """Get movies filtered according to wizard criteria"""
+        domain = [("active", "=", True)]
 
-        # Agregar filtros solo si los campos tienen valores válidos
+        # Add filters only if fields have valid values
         if self.date_from:
             domain.append(("release_date", ">=", self.date_from))
         if self.date_to:
@@ -161,42 +197,98 @@ class TMDBCollectionAnalysisWizard(models.TransientModel):
             domain.append(("popularity", "<=", self.max_popularity))
 
         movies = self.env["tmdb.movie"].search(domain)
-        _logger.info(f"Películas encontradas con filtros: {len(movies)}")
+        _logger.info(f"Movies found with filters: {len(movies)}")
         return movies
 
+    def _update_general_statistics(self, movies):
+        """Update general statistics for all analysis types"""
+        self.total_movies = len(movies)
+        self.avg_rating = self._calculate_average_rating(movies)
+        self.avg_popularity = self._calculate_average_popularity(movies)
+        self.date_range = f"{self.date_from} - {self.date_to}"
+
+    def _calculate_average_rating(self, movies):
+        """Calculate average rating from movie recordset"""
+        if not movies:
+            return 0.0
+        total_rating = sum(movie.vote_average for movie in movies)
+        return round(total_rating / len(movies), 2)
+
+    def _calculate_average_popularity(self, movies):
+        """Calculate average popularity from movie recordset"""
+        if not movies:
+            return 0.0
+        total_popularity = sum(movie.popularity for movie in movies)
+        return round(total_popularity / len(movies), 2)
+
+    def _calculate_average_from_list(self, values):
+        """Calculate average from a list of numeric values"""
+        if not values:
+            return 0.0
+        return round(sum(values) / len(values), 2)
+
+    def _get_success_notification(self, title, message):
+        """Generate success notification action"""
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": title,
+                "message": message,
+                "type": "success",
+            },
+        }
+
+    def _get_error_notification(self, title, message):
+        """Generate error notification action"""
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": title,
+                "message": message,
+                "type": "danger",
+            },
+        }
+
+    def _get_info_notification(self, title, message):
+        """Generate info notification action"""
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": title,
+                "message": message,
+                "type": "info",
+            },
+        }
+
+    # ===== SPECIFIC ANALYSIS METHODS =====
+
     def _analyze_by_decades(self, movies=None):
-        """Análisis de películas por décadas"""
-        # Usar las películas ya filtradas en action_run_analysis
+        """Analyze movies by decades"""
         if movies is None:
             movies = self._get_filtered_movies()
 
-        # Agrupar por décadas
+        # Group by decades
         decades = defaultdict(list)
         for movie in movies:
             if movie.release_date:
                 decade = (movie.release_date.year // 10) * 10
                 decades[f"{decade}s"].append(movie)
 
-        # Generar análisis
+        # Generate analysis
         analysis_lines = []
         chart_data = []
 
         for decade in sorted(decades.keys()):
             decade_movies = decades[decade]
-            avg_rating = (
-                sum(m.vote_average for m in decade_movies) / len(decade_movies)
-                if decade_movies
-                else 0
-            )
-            avg_popularity = (
-                sum(m.popularity for m in decade_movies) / len(decade_movies)
-                if decade_movies
-                else 0
-            )
+            avg_rating = self._calculate_average_rating(decade_movies)
+            avg_popularity = self._calculate_average_popularity(decade_movies)
 
-            analysis_lines.append(f"📅 {decade}: {len(decade_movies)} películas")
-            analysis_lines.append(f"   • Rating promedio: {avg_rating:.2f}")
-            analysis_lines.append(f"   • Popularidad promedio: {avg_popularity:.2f}")
+            analysis_lines.append(f"📅 {decade}: {len(decade_movies)} movies")
+            analysis_lines.append(f"   • Average rating: {avg_rating:.2f}")
+            analysis_lines.append(f"   • Average popularity: {avg_popularity:.2f}")
             analysis_lines.append("")
 
             chart_data.append(
@@ -212,12 +304,11 @@ class TMDBCollectionAnalysisWizard(models.TransientModel):
         self.decade_chart_data = str(chart_data)
 
     def _analyze_by_genres(self, movies=None):
-        """Análisis de distribución por géneros"""
-        # Usar las películas ya filtradas en action_run_analysis
+        """Analyze distribution by genres"""
         if movies is None:
             movies = self._get_filtered_movies()
 
-        # Agrupar por géneros
+        # Group by genres
         genre_stats = defaultdict(lambda: {"count": 0, "ratings": [], "popularity": []})
 
         for movie in movies:
@@ -226,25 +317,19 @@ class TMDBCollectionAnalysisWizard(models.TransientModel):
                 genre_stats[genre.name]["ratings"].append(movie.vote_average)
                 genre_stats[genre.name]["popularity"].append(movie.popularity)
 
-        # Generar análisis
+        # Generate analysis
         analysis_lines = []
         chart_data = []
 
         for genre_name, stats in sorted(
             genre_stats.items(), key=lambda x: x[1]["count"], reverse=True
         ):
-            avg_rating = (
-                sum(stats["ratings"]) / len(stats["ratings"]) if stats["ratings"] else 0
-            )
-            avg_popularity = (
-                sum(stats["popularity"]) / len(stats["popularity"])
-                if stats["popularity"]
-                else 0
-            )
+            avg_rating = self._calculate_average_from_list(stats["ratings"])
+            avg_popularity = self._calculate_average_from_list(stats["popularity"])
 
-            analysis_lines.append(f"🎭 {genre_name}: {stats['count']} películas")
-            analysis_lines.append(f"   • Rating promedio: {avg_rating:.2f}")
-            analysis_lines.append(f"   • Popularidad promedio: {avg_popularity:.2f}")
+            analysis_lines.append(f"🎭 {genre_name}: {stats['count']} movies")
+            analysis_lines.append(f"   • Average rating: {avg_rating:.2f}")
+            analysis_lines.append(f"   • Average popularity: {avg_popularity:.2f}")
             analysis_lines.append("")
 
             chart_data.append(
@@ -260,320 +345,313 @@ class TMDBCollectionAnalysisWizard(models.TransientModel):
         self.genre_chart_data = str(chart_data)
 
     def _analyze_rating_vs_popularity(self, movies=None):
-        """Análisis de correlación entre calificaciones y popularidad"""
-        # Usar las películas ya filtradas en action_run_analysis
+        """Analyze correlation between rating and popularity"""
         if movies is None:
             movies = self._get_filtered_movies()
 
-        # Calcular correlación
-        high_rating_high_pop = []
-        high_rating_low_pop = []
-        low_rating_high_pop = []
-        low_rating_low_pop = []
+        # Categorize movies
+        categories = self._categorize_movies_by_rating_and_popularity(movies)
 
-        for movie in movies:
-            if movie.vote_average >= 7.0 and movie.popularity >= 200:
-                high_rating_high_pop.append(movie)
-            elif movie.vote_average >= 7.0 and movie.popularity < 200:
-                high_rating_low_pop.append(movie)
-            elif movie.vote_average < 7.0 and movie.popularity >= 200:
-                low_rating_high_pop.append(movie)
-            else:
-                low_rating_low_pop.append(movie)
-
-        # Generar análisis
+        # Generate analysis
         analysis_lines = []
-        analysis_lines.append("📊 ANÁLISIS RATING VS POPULARIDAD")
+        analysis_lines.append("📊 RATING VS POPULARITY ANALYSIS")
         analysis_lines.append("=" * 40)
         analysis_lines.append(
-            f"🎯 Alta Calificación + Alta Popularidad: {len(high_rating_high_pop)}"
+            f"🎯 High Rating + High Popularity: {len(categories['high_rating_high_pop'])}"
         )
         analysis_lines.append(
-            f"⭐ Alta Calificación + Baja Popularidad: {len(high_rating_low_pop)}"
+            f"⭐ High Rating + Low Popularity: {len(categories['high_rating_low_pop'])}"
         )
         analysis_lines.append(
-            f"🔥 Baja Calificación + Alta Popularidad: {len(low_rating_high_pop)}"
+            f"🔥 Low Rating + High Popularity: {len(categories['low_rating_high_pop'])}"
         )
         analysis_lines.append(
-            f"📉 Baja Calificación + Baja Popularidad: {len(low_rating_low_pop)}"
+            f"📉 Low Rating + Low Popularity: {len(categories['low_rating_low_pop'])}"
         )
         analysis_lines.append("")
 
-        # Ejemplos de cada categoría
-        if high_rating_high_pop:
-            analysis_lines.append(
-                "🎯 Ejemplos de Alta Calificación + Alta Popularidad:"
-            )
-            for movie in high_rating_high_pop[:5]:
-                analysis_lines.append(
-                    f"   • {movie.title} (Rating: {movie.vote_average}, Popularidad: {movie.popularity:.1f})"
-                )
-            analysis_lines.append("")
-
-        if high_rating_low_pop:
-            analysis_lines.append(
-                "⭐ Películas Subestimadas (Alta Calificación, Baja Popularidad):"
-            )
-            for movie in high_rating_low_pop[:5]:
-                analysis_lines.append(
-                    f"   • {movie.title} (Rating: {movie.vote_average}, Popularidad: {movie.popularity:.1f})"
-                )
-            analysis_lines.append("")
+        # Add examples from each category
+        self._add_category_examples(analysis_lines, categories)
 
         chart_data = {
-            "high_rating_high_pop": len(high_rating_high_pop),
-            "high_rating_low_pop": len(high_rating_low_pop),
-            "low_rating_high_pop": len(low_rating_high_pop),
-            "low_rating_low_pop": len(low_rating_low_pop),
+            "high_rating_high_pop": len(categories["high_rating_high_pop"]),
+            "high_rating_low_pop": len(categories["high_rating_low_pop"]),
+            "low_rating_high_pop": len(categories["low_rating_high_pop"]),
+            "low_rating_low_pop": len(categories["low_rating_low_pop"]),
         }
 
         self.rating_popularity_analysis = "\n".join(analysis_lines)
         self.rating_popularity_chart_data = str(chart_data)
 
+    def _categorize_movies_by_rating_and_popularity(self, movies):
+        """Categorize movies by rating and popularity thresholds"""
+        categories = {
+            "high_rating_high_pop": [],
+            "high_rating_low_pop": [],
+            "low_rating_high_pop": [],
+            "low_rating_low_pop": [],
+        }
+
+        for movie in movies:
+            is_high_rating = movie.vote_average >= self.HIGH_RATING_THRESHOLD
+            is_high_popularity = movie.popularity >= self.HIGH_POPULARITY_THRESHOLD
+
+            if is_high_rating and is_high_popularity:
+                categories["high_rating_high_pop"].append(movie)
+            elif is_high_rating and not is_high_popularity:
+                categories["high_rating_low_pop"].append(movie)
+            elif not is_high_rating and is_high_popularity:
+                categories["low_rating_high_pop"].append(movie)
+            else:
+                categories["low_rating_low_pop"].append(movie)
+
+        return categories
+
+    def _add_category_examples(self, analysis_lines, categories):
+        """Add example movies from each category to analysis"""
+        if categories["high_rating_high_pop"]:
+            analysis_lines.append("🎯 Examples of High Rating + High Popularity:")
+            for movie in categories["high_rating_high_pop"][:5]:
+                analysis_lines.append(
+                    f"   • {movie.title} (Rating: {movie.vote_average}, Popularity: {movie.popularity:.1f})"
+                )
+            analysis_lines.append("")
+
+        if categories["high_rating_low_pop"]:
+            analysis_lines.append("⭐ Underrated Movies (High Rating, Low Popularity):")
+            for movie in categories["high_rating_low_pop"][:5]:
+                analysis_lines.append(
+                    f"   • {movie.title} (Rating: {movie.vote_average}, Popularity: {movie.popularity:.1f})"
+                )
+            analysis_lines.append("")
+
     def _analyze_collection_gaps(self, movies=None):
-        """Identificación de vacíos en la colección"""
-        # Usar las películas ya filtradas en action_run_analysis
+        """Identify gaps in the collection"""
         if movies is None:
             movies = self._get_filtered_movies()
 
-        # Análisis de vacíos por año
+        # Analyze gaps by year
+        years_with_movies = self._group_movies_by_year(movies)
+
+        # Analyze gaps by genre
+        genre_coverage = self._analyze_genre_coverage(movies)
+
+        # Generate analysis
+        analysis_lines = []
+        analysis_lines.append("🔍 COLLECTION GAPS IDENTIFICATION")
+        analysis_lines.append("=" * 50)
+
+        # Add year analysis
+        self._add_year_gap_analysis(analysis_lines, years_with_movies)
+
+        # Add genre analysis
+        self._add_genre_gap_analysis(analysis_lines, genre_coverage)
+
+        # Add recommendations
+        self._add_gap_recommendations(analysis_lines)
+
+        self.gaps_analysis = "\n".join(analysis_lines)
+
+    def _group_movies_by_year(self, movies):
+        """Group movies by release year"""
         years_with_movies = defaultdict(list)
         for movie in movies:
             if movie.release_date:
                 years_with_movies[movie.release_date.year].append(movie)
+        return years_with_movies
 
-        # Análisis de vacíos por género
+    def _analyze_genre_coverage(self, movies):
+        """Analyze genre coverage in the collection"""
         genre_coverage = defaultdict(int)
-        all_genres = self.env["tmdb.genre"].search([])
-
         for movie in movies:
             for genre in movie.genre_ids:
                 genre_coverage[genre.name] += 1
+        return genre_coverage
 
-        # Generar análisis
-        analysis_lines = []
-        analysis_lines.append("🔍 IDENTIFICACIÓN DE VACÍOS EN LA COLECCIÓN")
-        analysis_lines.append("=" * 50)
+    def _add_year_gap_analysis(self, analysis_lines, years_with_movies):
+        """Add year gap analysis to the report"""
+        analysis_lines.append("📅 DISTRIBUTION BY YEARS:")
 
-        # Vacíos por año
-        analysis_lines.append("📅 DISTRIBUCIÓN POR AÑOS:")
+        if not years_with_movies:
+            analysis_lines.append("   ❌ No movies with release dates")
+            return
 
-        if years_with_movies:
-            # Obtener años mínimo y máximo
-            min_year = min(years_with_movies.keys())
-            max_year = max(years_with_movies.keys())
-
-            current_year = min_year
-            total_years_with_movies = 0
-            total_gaps = 0
-
-            while current_year <= max_year:
-                if current_year in years_with_movies:
-                    # Año con películas
-                    count = len(years_with_movies[current_year])
-                    total_years_with_movies += 1
-                    if count < 3:  # Considerar vacío si tiene menos de 3 películas
-                        analysis_lines.append(
-                            f"   ⚠️  {current_year}: Solo {count} películas (VACÍO)"
-                        )
-                    else:
-                        analysis_lines.append(
-                            f"   ✅ {current_year}: {count} películas"
-                        )
-                    current_year += 1
-                else:
-                    # Encontrar el siguiente año con películas
-                    next_year_with_movies = None
-                    for year in range(current_year + 1, max_year + 1):
-                        if year in years_with_movies:
-                            next_year_with_movies = year
-                            break
-
-                    if next_year_with_movies:
-                        # Hay un rango vacío
-                        if current_year == next_year_with_movies - 1:
-                            analysis_lines.append(f"   ❌ {current_year}: 0 películas")
-                        else:
-                            analysis_lines.append(
-                                f"   ❌ {current_year} - {next_year_with_movies - 1}: 0 películas"
-                            )
-                        total_gaps += 1
-                        current_year = next_year_with_movies
-                    else:
-                        # No hay más años con películas
-                        if current_year == max_year:
-                            analysis_lines.append(f"   ❌ {current_year}: 0 películas")
-                        else:
-                            analysis_lines.append(
-                                f"   ❌ {current_year} - {max_year}: 0 películas"
-                            )
-                        total_gaps += 1
-                        break
-        else:
-            analysis_lines.append("   ❌ No hay películas con fechas de lanzamiento")
+        min_year = min(years_with_movies.keys())
+        max_year = max(years_with_movies.keys())
+        total_years_with_movies, total_gaps = self._analyze_year_gaps(
+            analysis_lines, years_with_movies, min_year, max_year
+        )
 
         analysis_lines.append(
-            f"\n📊 RESUMEN: {total_years_with_movies} años con películas de {max_year - min_year + 1 if years_with_movies else 0} años analizados ({total_gaps} rangos vacíos)"
+            f"\n📊 SUMMARY: {total_years_with_movies} years with movies out of "
+            f"{max_year - min_year + 1} analyzed years ({total_gaps} gap ranges)"
         )
         analysis_lines.append("")
 
-        # Vacíos por género
-        analysis_lines.append("🎭 DISTRIBUCIÓN POR GÉNEROS:")
+    def _analyze_year_gaps(self, analysis_lines, years_with_movies, min_year, max_year):
+        """Analyze gaps in years and add to analysis"""
+        total_years_with_movies = 0
+        total_gaps = 0
+        current_year = min_year
+
+        while current_year <= max_year:
+            if current_year in years_with_movies:
+                count = len(years_with_movies[current_year])
+                total_years_with_movies += 1
+                if count < self.MINIMAL_MOVIE_THRESHOLD:
+                    analysis_lines.append(
+                        f"   ⚠️  {current_year}: Only {count} movies (GAP)"
+                    )
+                else:
+                    analysis_lines.append(f"   ✅ {current_year}: {count} movies")
+                current_year += 1
+            else:
+                current_year, gap_added = self._handle_year_gap(
+                    analysis_lines, years_with_movies, current_year, max_year
+                )
+                if gap_added:
+                    total_gaps += 1
+
+        return total_years_with_movies, total_gaps
+
+    def _handle_year_gap(
+        self, analysis_lines, years_with_movies, current_year, max_year
+    ):
+        """Handle a gap in years and return next year to process"""
+        next_year_with_movies = None
+        for year in range(current_year + 1, max_year + 1):
+            if year in years_with_movies:
+                next_year_with_movies = year
+                break
+
+        if next_year_with_movies:
+            if current_year == next_year_with_movies - 1:
+                analysis_lines.append(f"   ❌ {current_year}: 0 movies")
+            else:
+                analysis_lines.append(
+                    f"   ❌ {current_year} - {next_year_with_movies - 1}: 0 movies"
+                )
+            return next_year_with_movies, True
+        else:
+            if current_year == max_year:
+                analysis_lines.append(f"   ❌ {current_year}: 0 movies")
+            else:
+                analysis_lines.append(f"   ❌ {current_year} - {max_year}: 0 movies")
+            return max_year + 1, True
+
+    def _add_genre_gap_analysis(self, analysis_lines, genre_coverage):
+        """Add genre gap analysis to the report"""
+        analysis_lines.append("🎭 DISTRIBUTION BY GENRES:")
+        all_genres = self.env["tmdb.genre"].search([])
         total_genres_with_movies = 0
+
         for genre in all_genres:
             count = genre_coverage.get(genre.name, 0)
             if count > 0:
                 total_genres_with_movies += 1
-                if count < 3:  # Considerar vacío si tiene menos de 3 películas
+                if count < self.MINIMAL_MOVIE_THRESHOLD:
                     analysis_lines.append(
-                        f"   ⚠️  {genre.name}: Solo {count} películas (VACÍO)"
+                        f"   ⚠️  {genre.name}: Only {count} movies (GAP)"
                     )
                 else:
-                    analysis_lines.append(f"   ✅ {genre.name}: {count} películas")
+                    analysis_lines.append(f"   ✅ {genre.name}: {count} movies")
             else:
-                analysis_lines.append(
-                    f"   ❌ {genre.name}: 0 películas (SIN PELÍCULAS)"
-                )
+                analysis_lines.append(f"   ❌ {genre.name}: 0 movies (NO MOVIES)")
 
         analysis_lines.append(
-            f"\n📊 RESUMEN: {total_genres_with_movies} géneros con películas de {len(all_genres)} géneros disponibles"
+            f"\n📊 SUMMARY: {total_genres_with_movies} genres with movies out of "
+            f"{len(all_genres)} available genres"
         )
         analysis_lines.append("")
 
-        # Recomendaciones
-        analysis_lines.append("💡 RECOMENDACIONES:")
-        analysis_lines.append("   • Buscar películas de años con poca representación")
-        analysis_lines.append("   • Explorar géneros con baja cobertura")
-        analysis_lines.append(
-            "   • Considerar películas de alta calificación pero baja popularidad"
-        )
-        analysis_lines.append("   • Investigar períodos históricos con pocas películas")
-
-        self.gaps_analysis = "\n".join(analysis_lines)
+    def _add_gap_recommendations(self, analysis_lines):
+        """Add recommendations to fill collection gaps"""
+        analysis_lines.append("💡 RECOMMENDATIONS:")
+        analysis_lines.append("   • Search for movies from underrepresented years")
+        analysis_lines.append("   • Explore genres with low coverage")
+        analysis_lines.append("   • Consider high-rated but low-popularity movies")
+        analysis_lines.append("   • Research historical periods with few movies")
 
     def _run_comprehensive_analysis(self, movies=None):
-        """Ejecuta un análisis completo de la colección"""
-        # Las estadísticas generales ya se actualizaron en action_run_analysis
+        """Execute comprehensive analysis of the collection"""
+        # General statistics already updated in action_run_analysis
 
-        # Ejecutar todos los análisis
+        # Execute all analysis types
         self._analyze_by_decades(movies)
         self._analyze_by_genres(movies)
         self._analyze_rating_vs_popularity(movies)
         self._analyze_collection_gaps(movies)
 
+    # ===== ACTION METHODS =====
+
     def action_export_analysis(self):
-        """Exporta el análisis a un formato legible"""
+        """Export analysis to readable format"""
         if not self.is_analysis_complete:
-            raise UserError("Debe ejecutar el análisis antes de exportar.")
+            raise UserError("Must execute analysis before exporting.")
 
-        # Crear contenido del reporte
-        report_content = f"""
-ANÁLISIS DE COLECCIÓN TMDB
-===========================
-Fecha: {self.last_analysis_date}
-Rango: {self.date_range}
-Total de Películas: {self.total_movies}
-Rating Promedio: {self.avg_rating:.2f}
-Popularidad Promedio: {self.avg_popularity:.2f}
-
-{self.decade_analysis}
-
-{self.genre_analysis}
-
-{self.rating_popularity_analysis}
-
-{self.gaps_analysis}
-        """
-
-        return {
-            "type": "ir.actions.client",
-            "tag": "display_notification",
-            "params": {
-                "title": "Análisis Exportado",
-                "message": "El análisis ha sido exportado al portapapeles.",
-                "type": "success",
-            },
-        }
+        return self._get_success_notification(
+            "Analysis Exported", "Analysis has been exported to clipboard."
+        )
 
     def action_save_analysis_permanent(self):
-        """Guarda el análisis de forma permanente en un modelo separado"""
+        """Save analysis permanently in a separate model"""
         if not self.is_analysis_complete:
-            raise UserError("Debe ejecutar el análisis antes de guardar.")
+            raise UserError("Must execute analysis before saving.")
 
         try:
-            # Verificar que tenemos datos válidos para guardar
+            # Verify we have valid data to save
             if not self.total_movies or self.total_movies == 0:
-                raise UserError("No hay datos de análisis válidos para guardar.")
+                raise UserError("No valid analysis data to save.")
 
-            # Crear registro permanente
+            # Create permanent record
             permanent_analysis = self.env["tmdb.permanent.analysis"].create(
-                {
-                    "name": f"Análisis {self.analysis_type} - {fields.Date.today()}",
-                    "analysis_type": self.analysis_type,
-                    "date_from": self.date_from,
-                    "date_to": self.date_to,
-                    "min_rating": self.min_rating,
-                    "max_rating": self.max_rating,
-                    "min_popularity": self.min_popularity,
-                    "max_popularity": self.max_popularity,
-                    "total_movies": self.total_movies,
-                    "avg_rating": self.avg_rating,
-                    "avg_popularity": self.avg_popularity,
-                    "date_range": self.date_range,
-                    "decade_analysis": self.decade_analysis,
-                    "genre_analysis": self.genre_analysis,
-                    "rating_popularity_analysis": self.rating_popularity_analysis,
-                    "gaps_analysis": self.gaps_analysis,
-                    "decade_chart_data": self.decade_chart_data,
-                    "genre_chart_data": self.genre_chart_data,
-                    "rating_popularity_chart_data": self.rating_popularity_chart_data,
-                    "user_id": self.env.user.id,
-                }
+                self._prepare_permanent_analysis_values()
             )
 
-            _logger.info(
-                f"Análisis guardado permanentemente con ID: {permanent_analysis.id}"
+            _logger.info(f"Analysis saved permanently with ID: {permanent_analysis.id}")
+
+            return self._get_success_notification(
+                "Analysis Saved",
+                f"Analysis saved permanently with ID: {permanent_analysis.id}. "
+                f"Movies analyzed: {self.total_movies}",
             )
 
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": "Análisis Guardado",
-                    "message": f"Análisis guardado permanentemente con ID: {permanent_analysis.id}. Películas analizadas: {self.total_movies}",
-                    "type": "success",
-                },
-            }
         except Exception as e:
-            _logger.error(f"Error al guardar análisis: {str(e)}")
-            raise UserError(f"Error al guardar el análisis: {str(e)}")
+            _logger.error(f"Error saving analysis: {str(e)}")
+            raise UserError(f"Error saving analysis: {str(e)}")
+
+    def _prepare_permanent_analysis_values(self):
+        """Prepare values for permanent analysis record"""
+        return {
+            "name": f"Analysis {self.analysis_type} - {fields.Date.today()}",
+            "analysis_type": self.analysis_type,
+            "date_from": self.date_from,
+            "date_to": self.date_to,
+            "min_rating": self.min_rating,
+            "max_rating": self.max_rating,
+            "min_popularity": self.min_popularity,
+            "max_popularity": self.max_popularity,
+            "total_movies": self.total_movies,
+            "avg_rating": self.avg_rating,
+            "avg_popularity": self.avg_popularity,
+            "date_range": self.date_range,
+            "decade_analysis": self.decade_analysis,
+            "genre_analysis": self.genre_analysis,
+            "rating_popularity_analysis": self.rating_popularity_analysis,
+            "gaps_analysis": self.gaps_analysis,
+            "decade_chart_data": self.decade_chart_data,
+            "genre_chart_data": self.genre_chart_data,
+            "rating_popularity_chart_data": self.rating_popularity_chart_data,
+            "user_id": self.env.user.id,
+        }
 
     def action_export_to_file(self):
-        """Exporta el análisis a un archivo de texto"""
+        """Export analysis to text file"""
         if not self.is_analysis_complete:
-            raise UserError("Debe ejecutar el análisis antes de exportar.")
+            raise UserError("Must execute analysis before exporting.")
 
-        # Crear contenido del archivo
-        filename = f"analisis_coleccion_{fields.Date.today()}.txt"
-        content = f"""
-ANÁLISIS DE COLECCIÓN TMDB
-===========================
-Fecha: {self.last_analysis_date}
-Rango: {self.date_range}
-Total de Películas: {self.total_movies}
-Rating Promedio: {self.avg_rating:.2f}
-Popularidad Promedio: {self.avg_popularity:.2f}
-
-{self.decade_analysis}
-
-{self.genre_analysis}
-
-{self.rating_popularity_analysis}
-
-{self.gaps_analysis}
-        """
-
-        # Crear archivo de descarga
+        # Create download file
+        filename = f"collection_analysis_{fields.Date.today()}.txt"
         return {
             "type": "ir.actions.act_url",
             "url": f"/web/content?model=tmdb.collection.analysis.wizard&id={self.id}&field=analysis_file&download=true&filename={filename}",
@@ -581,159 +659,83 @@ Popularidad Promedio: {self.avg_popularity:.2f}
         }
 
     def action_clear_analysis(self):
-        """Limpia los resultados del análisis"""
-        self.write(
-            {
-                "decade_analysis": "",
-                "genre_analysis": "",
-                "rating_popularity_analysis": "",
-                "gaps_analysis": "",
-                "is_analysis_complete": False,
-                "last_analysis_date": False,
-                "total_movies": 0,
-                "avg_rating": 0.0,
-                "avg_popularity": 0.0,
-                "date_range": "",
-            }
+        """Clear analysis results"""
+        self.write(self._get_clear_analysis_values())
+        return self._get_info_notification(
+            "Analysis Cleared", "Analysis results have been cleared."
         )
 
+    def _get_clear_analysis_values(self):
+        """Get values to clear all analysis fields"""
         return {
-            "type": "ir.actions.client",
-            "tag": "display_notification",
-            "params": {
-                "title": "Análisis Limpiado",
-                "message": "Los resultados del análisis han sido limpiados.",
-                "type": "info",
-            },
+            "decade_analysis": "",
+            "genre_analysis": "",
+            "rating_popularity_analysis": "",
+            "gaps_analysis": "",
+            "is_analysis_complete": False,
+            "last_analysis_date": False,
+            "total_movies": 0,
+            "avg_rating": 0.0,
+            "avg_popularity": 0.0,
+            "date_range": "",
         }
 
     def action_check_analysis_status(self):
-        """Verifica los datos disponibles para el análisis"""
+        """Check available data for analysis"""
         movies_count = self.env["tmdb.movie"].search_count([("active", "=", True)])
         filtered_movies = self._get_filtered_movies()
 
         # Check if permanent analysis model is accessible
-        try:
-            permanent_analysis_count = self.env["tmdb.permanent.analysis"].search_count(
-                []
-            )
-            permanent_analysis_accessible = True
-        except Exception as e:
-            permanent_analysis_accessible = False
-            permanent_analysis_count = 0
+        permanent_analysis_accessible, permanent_analysis_count = (
+            self._check_permanent_analysis_access()
+        )
 
-        message = f"""
-Datos Disponibles para Análisis:
-- Películas totales en BD: {movies_count}
-- Películas con filtros aplicados: {len(filtered_movies)}
-- Análisis completado: {"Sí" if self.is_analysis_complete else "No"}
-- Tipo de análisis: {self.analysis_type}
-- Filtros aplicados: {self.date_from} - {self.date_to}
-- Modelo de análisis permanente accesible: {"Sí" if permanent_analysis_accessible else "No"}
-- Análisis guardados existentes: {permanent_analysis_count}
+        message = self._build_status_message(
+            movies_count,
+            filtered_movies,
+            permanent_analysis_accessible,
+            permanent_analysis_count,
+        )
+
+        return self._get_info_notification("Available Data for Analysis", message)
+
+    def _check_permanent_analysis_access(self):
+        """Check if permanent analysis model is accessible"""
+        try:
+            count = self.env["tmdb.permanent.analysis"].search_count([])
+            return True, count
+        except Exception:
+            return False, 0
+
+    def _build_status_message(
+        self, movies_count, filtered_movies, permanent_accessible, permanent_count
+    ):
+        """Build status message for analysis data"""
+        return f"""
+Available Data for Analysis:
+- Total movies in DB: {movies_count}
+- Movies with applied filters: {len(filtered_movies)}
+- Analysis completed: {"Yes" if self.is_analysis_complete else "No"}
+- Analysis type: {self.analysis_type}
+- Applied filters: {self.date_from} - {self.date_to}
+- Permanent analysis model accessible: {"Yes" if permanent_accessible else "No"}
+- Existing saved analyses: {permanent_count}
         """
 
-        return {
-            "type": "ir.actions.client",
-            "tag": "display_notification",
-            "params": {
-                "title": "Datos Disponibles para Análisis",
-                "message": message,
-                "type": "info",
-            },
-        }
-
     def action_run_and_save_analysis(self):
-        """Ejecuta el análisis y lo guarda automáticamente"""
+        """Execute analysis and save it automatically"""
         try:
-            # Ejecutar el análisis
+            # Execute analysis
             result = self.action_run_analysis()
 
-            # Si el análisis fue exitoso, guardarlo automáticamente
+            # If analysis was successful, save it automatically
             if self.is_analysis_complete:
-                save_result = self.action_save_analysis_permanent()
-                return save_result
+                return self.action_save_analysis_permanent()
             else:
                 return result
 
         except Exception as e:
-            _logger.error(f"Error en análisis y guardado: {str(e)}")
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": "Error",
-                    "message": f"Error durante el análisis y guardado: {str(e)}",
-                    "type": "danger",
-                },
-            }
-
-    def action_debug_wizard_state(self):
-        """Método de debug para verificar el estado del wizard"""
-        debug_info = f"""
-Estado del Wizard:
-- ID: {self.id}
-- Análisis completado: {self.is_analysis_complete}
-- Total películas: {self.total_movies}
-- Rating promedio: {self.avg_rating}
-- Popularidad promedio: {self.avg_popularity}
-- Tipo de análisis: {self.analysis_type}
-- Fecha desde: {self.date_from}
-- Fecha hasta: {self.date_to}
-- Análisis por décadas: {"Sí" if self.decade_analysis else "No"}
-- Análisis por géneros: {"Sí" if self.genre_analysis else "No"}
-- Análisis rating vs popularidad: {"Sí" if self.rating_popularity_analysis else "No"}
-- Análisis de vacíos: {"Sí" if self.gaps_analysis else "No"}
-        """
-
-        return {
-            "type": "ir.actions.client",
-            "tag": "display_notification",
-            "params": {
-                "title": "Debug - Estado del Wizard",
-                "message": debug_info,
-                "type": "info",
-            },
-        }
-
-    def action_test_save_analysis(self):
-        """Prueba específicamente el guardado del análisis actual"""
-        try:
-            # Verificar el estado antes de intentar guardar
-            if not self.is_analysis_complete:
-                return {
-                    "type": "ir.actions.client",
-                    "tag": "display_notification",
-                    "params": {
-                        "title": "Error",
-                        "message": "El análisis no está completado. Ejecute el análisis primero.",
-                        "type": "danger",
-                    },
-                }
-
-            if not self.total_movies or self.total_movies == 0:
-                return {
-                    "type": "ir.actions.client",
-                    "tag": "display_notification",
-                    "params": {
-                        "title": "Error",
-                        "message": "No hay películas analizadas. El análisis no encontró datos.",
-                        "type": "danger",
-                    },
-                }
-
-            # Intentar guardar
-            save_result = self.action_save_analysis_permanent()
-            return save_result
-
-        except Exception as e:
-            _logger.error(f"Error en prueba de guardado: {str(e)}")
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": "Error en Prueba de Guardado",
-                    "message": f"Error: {str(e)}",
-                    "type": "danger",
-                },
-            }
+            _logger.error(f"Error in analysis and save: {str(e)}")
+            return self._get_error_notification(
+                "Error", f"Error during analysis and save: {str(e)}"
+            )
