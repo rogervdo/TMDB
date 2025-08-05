@@ -8,3 +8,5 @@ access_tmdb_permanent_analysis_user,tmdb.permanent.analysis.user,model_tmdb_perm
 access_tmdb_search_result_user,tmdb.search.result.user,model_tmdb_search_result,base.group_user,1,1,1,1
 access_tmdb_genre_user,tmdb.genre.user,model_tmdb_genre,base.group_user,1,1,1,1
 access_tmdb_genre_manager,tmdb.genre.manager,model_tmdb_genre,base.group_system,1,1,1,1
+access_tmdb_data_cleanup_wizard_user,tmdb.data.cleanup.wizard.user,model_tmdb_data_cleanup_wizard,base.group_user,1,1,1,1
+access_tmdb_data_cleanup_wizard_line_user,tmdb.data.cleanup.wizard.line.user,model_tmdb_data_cleanup_wizard_line,base.group_user,1,1,1,1

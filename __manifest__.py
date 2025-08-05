@@ -37,6 +37,7 @@
         "views/tmdb_collection_analysis_wizard_views.xml",
         "views/tmdb_permanent_analysis_views.xml",
         "views/tmdb_search_result_views.xml",
+        "views/tmdb_data_cleanup_wizard_views.xml",
         "security/ir.model.access.csv",
     ],
     "demo": [],

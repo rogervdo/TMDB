@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- TMDB Data Cleanup Wizard Form View -->
+    <record id="view_tmdb_data_cleanup_wizard_form" model="ir.ui.view">
+        <field name="name">tmdb.data.cleanup.wizard.form</field>
+        <field name="model">tmdb.data.cleanup.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_detect_duplicates" 
+                            string="Detect Duplicates" 
+                            type="object" 
+                            class="btn-primary"
+                            invisible="duplicate_count > 0"/>
+                    <button name="action_analyze_duplicates" 
+                            string="Analyze Only" 
+                            type="object" 
+                            class="btn-info"
+                            invisible="duplicate_count == 0"
+                            help="Review duplicates without making changes"/>
+                    <button name="action_process_duplicates" 
+                            string="Process Duplicates" 
+                            type="object" 
+                            class="btn-warning"
+                            invisible="duplicate_count == 0"
+                            help="Execute the selected action on duplicates"/>
+                    <button name="action_create_test_duplicates" 
+                            string="Create Test Duplicates" 
+                            type="object" 
+                            class="btn-secondary"
+                            help="Create dummy duplicate movies for testing"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="detection_criteria" invisible="1"/>
+                            Data Cleanup Wizard
+                        </h1>
+                    </div>
+                    
+                    <group>
+                        <group string="Detection Settings">
+                            <field name="detection_criteria" 
+                                   readonly="duplicate_count > 0"/>
+                        </group>
+                        <group string="Processing Settings">
+                            <field name="action_type" 
+                                   readonly="duplicate_count == 0"/>
+                            <field name="keep_preference" 
+                                   readonly="duplicate_count == 0"/>
+                        </group>
+                    </group>
+
+                    <group string="Results" invisible="duplicate_count == 0">
+                        <group>
+                            <field name="duplicate_count" readonly="1"/>
+                            <field name="processed_count" readonly="1" 
+                                   invisible="processed_count == 0"/>
+                        </group>
+                        <group>
+                            <field name="analysis_results" readonly="1" 
+                                   widget="text" nolabel="1"/>
+                        </group>
+                    </group>
+
+                    <!-- No Duplicates Message - positioned where table would be -->
+                    <div invisible="duplicate_count > 0" style="text-align: center; padding: 40px 20px; background-color: #f8f9fa; border-radius: 8px; margin: 20px 0;">
+                        <div style="color: #6c757d; font-size: 16px;">
+                            <p style="margin-bottom: 15px;">
+                                📁 Your movie database is clean and well-organized.
+                            </p>
+                            <p style="margin-bottom: 0; font-size: 14px;">
+                                • Select detection criteria above and click <strong>"Detect Duplicates"</strong> to scan your database<br/>
+                                • Or click <strong>"Create Test Duplicates"</strong> to add sample data for testing
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Duplicate Movies List -->
+                    <notebook invisible="duplicate_count == 0">
+                        <page string="Duplicate Movies" name="duplicates">
+                            <field name="duplicate_line_ids" nolabel="1">
+                                <list editable="bottom">
+                                    <field name="group_number"/>
+                                    <field name="movie_title"/>
+                                    <field name="movie_tmdb_id"/>
+                                    <field name="movie_release_date"/>
+                                    <field name="movie_vote_average"/>
+                                    <field name="is_recommended_keep" 
+                                           invisible="parent.keep_preference != 'manual'"/>
+                                    <field name="duplicate_reason"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Movie Details" name="details">
+                            <field name="duplicate_line_ids" nolabel="1">
+                                <list>
+                                    <field name="group_number"/>
+                                    <field name="movie_title"/>
+                                    <field name="movie_tmdb_id"/>
+                                    <field name="movie_release_date"/>
+                                    <field name="movie_vote_average"/>
+                                    <field name="is_recommended_keep"/>
+                                    <field name="duplicate_reason"/>
+                                </list>
+                                <form>
+                                    <sheet>
+                                        <group>
+                                            <group>
+                                                <field name="group_number" readonly="1"/>
+                                                <field name="duplicate_reason" readonly="1"/>
+                                                <field name="is_recommended_keep"/>
+                                            </group>
+                                        </group>
+                                        
+                                        <group string="Movie Information">
+                                            <group>
+                                                <field name="movie_title" readonly="1"/>
+                                                <field name="movie_tmdb_id" readonly="1"/>
+                                                <field name="movie_release_date" readonly="1"/>
+                                                <field name="movie_vote_average" readonly="1"/>
+                                            </group>
+                                            <group>
+                                                <field name="movie_overview" readonly="1" 
+                                                       widget="text"/>
+                                            </group>
+                                        </group>
+                                    </sheet>
+                                </form>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <footer>
+                    <button string="Close" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action for TMDB Data Cleanup Wizard -->
+    <record id="action_tmdb_data_cleanup_wizard" model="ir.actions.act_window">
+        <field name="name">Data Cleanup Wizard</field>
+        <field name="res_model">tmdb.data.cleanup.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{}</field>
+    </record>
+
+    <!-- Alternative menu in Settings for system administrators -->
+    <menuitem id="menu_tmdb_data_cleanup_settings"
+              name="TMDB Data Cleanup"
+              action="action_tmdb_data_cleanup_wizard"
+              parent="base.menu_custom"
+              sequence="30"
+              groups="base.group_system"/>
+</odoo>

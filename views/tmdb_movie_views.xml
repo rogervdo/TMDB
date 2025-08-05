@@ -119,6 +119,15 @@
             </field>
         </record>
 
+        <!-- Action button for Data Cleanup -->
+        <record id="action_tmdb_cleanup_from_movies" model="ir.actions.act_window">
+            <field name="name">Data Cleanup Wizard</field>
+            <field name="res_model">tmdb.data.cleanup.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="context">{}</field>
+        </record>
+
         <!-- Sync All Directors Action -->
         <record id="action_sync_all_directors" model="ir.actions.server">
             <field name="name">Sync All Directors to Contacts</field>
@@ -146,5 +155,11 @@
                   parent="menu_tmdb_root" 
                   action="action_sync_all_directors" 
                   sequence="20"/>
+
+        <menuitem id="menu_tmdb_cleanup" 
+                  name="Data Cleanup" 
+                  parent="menu_tmdb_root" 
+                  action="action_tmdb_cleanup_from_movies" 
+                  sequence="30"/>
     </data>
 </odoo> 

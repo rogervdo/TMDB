@@ -1,6 +1,50 @@
-# Custom Addon - Odoo 18 Module Template
+# TMDB Movies Module - Odoo 18
 
-This is a blank template for creating custom Odoo 18 modules.
+This module provides TMDB API integration for movie data management in Odoo 18.
+
+## Features
+
+- **TMDB API Integration**: Sync movie data from The Movie Database
+- **Movie Management**: Store and manage movie information locally
+- **Search Functionality**: Search movies both locally and on TMDB
+- **Data Cleanup Tools**: Detect duplicates and incomplete information
+- **Collection Analysis**: Analyze movie collections and generate reports
+- **Configuration Management**: Easy setup and configuration
+
+## Data Cleanup Wizard
+
+The Data Cleanup Wizard helps identify and report data quality issues in your movie database:
+
+### Duplicate Detection
+
+- **TMDB ID**: Find movies with duplicate TMDB IDs
+- **Title**: Find movies with duplicate titles (case-insensitive)
+- **Title + Release Date**: Find movies with same title and release date
+- **All Criteria**: Combine all duplicate detection methods
+
+### Incomplete Information Detection
+
+- **Basic Information**: Check for missing title, overview, and release date
+- **Extended Information**: Check for missing director, genres, and poster
+- **All Information**: Comprehensive check of all important fields
+
+### Features
+
+- **Non-destructive**: Only reports issues, doesn't modify data
+- **Configurable**: Choose which types of analysis to run
+- **Detailed Reports**: View specific movies with issues
+- **Export Capabilities**: Generate reports for further analysis
+
+### Usage
+
+1. Navigate to **Movies > Data Cleanup** in the main menu
+2. Select the types of analysis you want to run
+3. Choose detection criteria for duplicates and incomplete information
+4. Click **"Run Analysis"** to start the scan
+5. Review results and use the action buttons to view details
+6. Export reports for further analysis if needed
+
+## Module Structure
 
 ## Module Structure
 
