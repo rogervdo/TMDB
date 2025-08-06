@@ -31,7 +31,7 @@ class TMDBCollectionAnalysisWizard(models.TransientModel):
     analysis_type = fields.Selection(
         ANALYSIS_TYPES,
         string="Tipo de Análisis",
-        default="comprehensive",
+        default="Comprensivo",
         required=True,
     )
 

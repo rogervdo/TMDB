@@ -8,29 +8,28 @@ class TMDBContactUtils(models.AbstractModel):
     _name = "tmdb.utils.contact"
     _description = "TMDB Contact Utilities"
 
+    # De entrada tenemos: director_name
     def find_or_create_director_contact_simple(self, director_name):
-        """Find existing director contact or create a new one (without categories)"""
         if not director_name:
             return None
 
         try:
-            # Search for existing contact with the same name
+            # Buscar director existente (QUERY EN RES PARTNER >> name=director_name AND is_director=True)
             existing_contact = self.env["res.partner"].search(
-                [("name", "=", director_name), ("is_company", "=", False)], limit=1
+                [("name", "=", director_name), ("is_director", "=", True)],
+                limit=1,
             )
 
             if existing_contact:
                 return existing_contact
 
-            # Create new director contact with minimal fields
+            # Creamos nuevo director si no existe el contacto
             contact_vals = {
                 "name": director_name,
                 "is_company": False,
+                "is_director": True,  # Nuevo campo
+                "function": "Film Director",  # Function aka Job Description
             }
-
-            # Add function field if it exists (contacts module)
-            if hasattr(self.env["res.partner"], "function"):
-                contact_vals["function"] = "Film Director"
 
             director_contact = self.env["res.partner"].create(contact_vals)
             return director_contact
@@ -55,12 +54,16 @@ class TMDBContactUtils(models.AbstractModel):
             )
 
             if existing_contact:
+                # Asegurar que el contacto existente esté marcado como director
+                if not existing_contact.is_director:
+                    existing_contact.write({"is_director": True})
                 return existing_contact
 
             # Create new director contact with safe field handling
             contact_vals = {
                 "name": director_name,
                 "is_company": False,
+                "is_director": True,  # ← AGREGADO: Marcar como director
             }
 
             # Add function field if it exists (contacts module)

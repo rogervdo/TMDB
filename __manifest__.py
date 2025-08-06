@@ -29,6 +29,7 @@
     },
     "data": [
         "views/res_config_settings_views.xml",
+        "views/res_partner_views.xml",
         "views/tmdb_movie_views.xml",
         "views/tmdb_movie_search_filters.xml",
         "views/tmdb_genre_views.xml",

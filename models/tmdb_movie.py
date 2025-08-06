@@ -12,10 +12,15 @@ class TMDBMovie(models.Model):
     _order = "title"
     _inherit = ["tmdb.utils", "tmdb.utils.contact"]
 
+    # ===== SQL CONSTRAINTS =====
+    _sql_constraints = [
+        ("tmdb_id_unique", "unique(tmdb_id)", "TMDB ID must be unique"),
+    ]
+
     # ===== FIELDS =====
 
     # Basic movie information
-    tmdb_id = fields.Integer(string="TMDB ID", required=True, unique=True)
+    tmdb_id = fields.Integer(string="TMDB ID", required=True)
     title = fields.Char(string="Title", required=True)
     original_title = fields.Char(string="Original Title")
     overview = fields.Text(string="Overview")
@@ -41,7 +46,15 @@ class TMDBMovie(models.Model):
         string="Director Contact",
         help="Link to director contact in Odoo contacts",
         domain="[('is_company', '=', False)]",
-        invisible=True,  # Hidden from views but still functional
+    )
+
+    actor_ids = fields.Many2many(
+        "res.partner",  # Modelo Relacionado
+        "movie_actor_rel",  # Nombre de la tabla intermedia
+        "movie_id",  # Campo para este modelo
+        "actor_id",  # Campo para el otro modelo
+        string="Actores",
+        domain="[('is_actor', '=', True)]",  # Solo mostrar contactos ACTORES
     )
 
     # Computed fields
@@ -65,12 +78,17 @@ class TMDBMovie(models.Model):
         store=True,
     )
 
+    total_actors = fields.Integer(
+        string="Total de Actores", compute="_compute_total_actors"
+    )
+
     # Status fields
     active = fields.Boolean(string="Active", default=True)
     last_sync = fields.Datetime(string="Last Sync", default=fields.Datetime.now)
 
     # ===== SYNC METHODS =====
 
+    # XML Action
     def sync_from_tmdb(self):
         """Button action to sync this movie from TMDB"""
         if not self.tmdb_id:
@@ -128,11 +146,14 @@ class TMDBMovie(models.Model):
         # Process director information
         director, director_contact = self._process_director_info(tmdb_id)
 
+        # Process actors information
+        actor_ids = self._process_actors_info(tmdb_id)
+
         # Process genres
         genre_ids = self._process_genres(movie_data.get("genres", []))
 
         movie_vals = self._prepare_movie_values(
-            movie_data, director, director_contact, genre_ids
+            movie_data, director, director_contact, genre_ids, actor_ids
         )
 
         if existing_movie:
@@ -140,6 +161,28 @@ class TMDBMovie(models.Model):
             return existing_movie
         else:
             return self.create(movie_vals)
+
+    def _process_actors_info(self, tmdb_id):
+        """Process actors information from TMDB and return actor IDs"""
+        try:
+            credits_data = self.fetch_movie_credits_from_tmdb(tmdb_id)
+            if not credits_data or "cast" not in credits_data:
+                return []
+
+            actor_ids = []
+            # Process only first 10 actors
+            for cast_member in credits_data.get("cast", [])[:10]:
+                actor_name = cast_member.get("name")
+                if actor_name:
+                    # Find or create actor contact
+                    actor_contact = self.find_or_create_actor_contact(actor_name)
+                    if actor_contact:
+                        actor_ids.append(actor_contact.id)
+
+            return actor_ids
+        except Exception as e:
+            _logger.error(f"Error processing actors for TMDB ID {tmdb_id}: {e}")
+            return []
 
     def sync_popular_movies(self, page=1, limit=20, year_filter=None):
         """Sync popular movies from TMDB with optional year filtering"""
@@ -168,6 +211,30 @@ class TMDBMovie(models.Model):
         except requests.exceptions.RequestException as e:
             _logger.error(f"Error fetching popular movies: {e}")
             return 0
+
+    def find_or_create_actor_contact(self, actor_name):
+        if not actor_name:
+            return None
+
+        # Buscar actor existente
+        existing_actor = self.env["res.partner"].search(
+            [("name", "=", actor_name), ("is_actor", "=", True)], limit=1
+        )
+
+        if existing_actor:
+            return existing_actor
+        # Crear nuevo actor
+        try:
+            actor_vals = {
+                "name": actor_name,
+                "is_company": False,
+                "is_actor": True,
+                "function": "Actor",
+            }
+            return self.env["res.partner"].create(actor_vals)
+        except Exception as e:
+            _logger.error(f"Error creating actor contact for {actor_name}: {e}")
+            return None
 
     def fetch_movie_credits_from_tmdb(self, tmdb_id):
         """Fetch movie credits data from TMDB API"""
@@ -211,7 +278,9 @@ class TMDBMovie(models.Model):
             if credits_data:
                 director = self.get_director_from_credits(credits_data)
                 if director:
-                    director_contact = self.find_or_create_director_contact(director)
+                    director_contact = self.find_or_create_director_contact_simple(
+                        director
+                    )
                     self.write(
                         {
                             "director": director,
@@ -241,14 +310,16 @@ class TMDBMovie(models.Model):
 
     def sync_all_directors_to_contacts(self):
         """Sync all directors from movies to contacts"""
-        synced_count = super().sync_all_directors_to_contacts(self)
+        # Get all movies to sync
+        all_movies = self.search([])
+        synced_count = super().sync_all_directors_to_contacts(all_movies)
         return self.get_notification(
             "Success", f"Synced {synced_count} directors to contacts.", "success"
         )
 
     def create_director_contact_from_field(self):
         """Create director contact from the director field"""
-        return self.create_director_contact_from_field(self)
+        return super().create_director_contactExp_from_field(self)
 
     # ===== SEARCH METHODS =====
 
@@ -351,6 +422,11 @@ class TMDBMovie(models.Model):
 
     # ===== COMPUTED FIELDS =====
 
+    @api.depends("actor_ids")
+    def _compute_total_actors(self):
+        for movie in self:
+            movie.total_actors = len(movie.actor_ids)
+
     @api.depends("release_date")
     def _compute_age_category(self):
         for record in self:
@@ -406,7 +482,7 @@ class TMDBMovie(models.Model):
         if credits_data:
             director = self.get_director_from_credits(credits_data)
             if director:
-                director_contact = self.find_or_create_director_contact(director)
+                director_contact = self.find_or_create_director_contact_simple(director)
         return director, director_contact
 
     def _process_genres(self, genres_data):
@@ -426,9 +502,11 @@ class TMDBMovie(models.Model):
                     genre_ids.append(genre_record.id)
         return genre_ids
 
-    def _prepare_movie_values(self, movie_data, director, director_contact, genre_ids):
+    def _prepare_movie_values(
+        self, movie_data, director, director_contact, genre_ids, actor_ids=None
+    ):
         """Prepare movie values for create/update operations"""
-        return {
+        movie_vals = {
             "tmdb_id": movie_data.get("id"),
             "title": movie_data.get("title") or "",
             "original_title": movie_data.get("original_title") or False,
@@ -444,6 +522,12 @@ class TMDBMovie(models.Model):
             "last_sync": fields.Datetime.now(),
             "genre_ids": [(6, 0, genre_ids)],
         }
+
+        # Add actor_ids if provided
+        if actor_ids:
+            movie_vals["actor_ids"] = [(6, 0, actor_ids)]
+
+        return movie_vals
 
     def _build_popular_movies_url(self, api_key, base_url, page, year_filter):
         """Build URL and parameters for popular movies API call"""

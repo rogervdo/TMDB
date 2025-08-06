@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Heredar la vista de formulario de res.partner -->
+        <record id="view_partner_form_inherit_tmdb" model="ir.ui.view">
+            <field name="name">res.partner.form.inherit.tmdb</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_partner_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='category_id']" position="after">
+                    <field name="is_director"/>
+                    <field name="is_actor"/>
+                </xpath>
+                
+                <!-- Agregar página para películas dirigidas si es director -->
+                <xpath expr="//notebook" position="inside">
+                    <page string="Películas Dirigidas" invisible="not is_director">
+                        <group>
+                            <field name="total_directed_movies"/>
+                        </group>
+                        <field name="directed_movies_ids">
+                            <list>
+                                <field name="title"/>
+                                <field name="release_date"/>
+                                <field name="vote_average"/>
+                                <field name="popularity"/>
+                            </list>
+                        </field>
+                    </page>
+                    <page string="Películas Actuadas" invisible="not is_actor">
+                        <group>
+                            <field name="total_acted_movies"/>
+                        </group>
+                        <field name="acted_movies_ids">
+                            <list>
+                                <field name="title"/>
+                                <field name="release_date"/>
+                                <field name="vote_average"/>
+                                <field name="popularity"/>
+                            </list>
+                        </field>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- TODO: Heredar la vista de lista de res.partner -->
+        <!-- Comentado temporalmente para permitir la instalación del módulo -->
+        <!--
+        <record id="view_partner_tree_inherit_tmdb" model="ir.ui.view">
+            <field name="name">res.partner.tree.inherit.tmdb</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_partner_tree"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='name']" position="after">
+                    <field name="is_director" widget="boolean_toggle"/>
+                </xpath>
+            </field>
+        </record>
+        -->
+
+        <!-- TODO: Filtro para directores en la vista de búsqueda -->
+        <!-- Comentado temporalmente para permitir la instalación del módulo -->
+        <!--
+        <record id="view_res_partner_filter_inherit_tmdb" model="ir.ui.view">
+            <field name="name">res.partner.search.inherit.tmdb</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_res_partner_filter"/>
+            <field name="arch" type="xml">
+                <xpath expr="//filter[@name='supplier']" position="after">
+                    <filter string="Directores" name="directors" domain="[('is_director', '=', True)]"/>
+                </xpath>
+            </field>
+        </record>
+        -->
+
+        <!-- Acción para ver solo directores -->
+        <record id="action_partner_directors" model="ir.actions.act_window">
+            <field name="name">Directores</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">res.partner</field>
+            <field name="view_mode">list,form</field>
+            <field name="domain">[('is_director', '=', True)]</field>
+            <field name="context">{'default_is_director': True}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    ¡Crea tu primer director!
+                </p>
+                <p>
+                    Aquí puedes gestionar todos los directores de películas.
+                </p>
+            </field>
+        </record>
+
+        <!-- Menú para directores -->
+        <menuitem id="menu_partner_directors"
+                  name="Directores"
+                  parent="contacts.menu_contacts"
+                  action="action_partner_directors"
+                  sequence="15"/>
+
+    </data>
+</odoo>

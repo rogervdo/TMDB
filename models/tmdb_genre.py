@@ -12,11 +12,20 @@ class TMDBGenre(models.Model):
     _order = "name"
     _inherit = ["tmdb.utils"]
 
+    # ===== SQL CONSTRAINTS =====
+    _sql_constraints = [
+        (
+            "tmdb_genre_id_unique",
+            "unique(tmdb_genre_id)",
+            "TMDB Genre ID must be unique",
+        ),
+    ]
+
     # ===== FIELDS =====
 
     # Basic genre information
     name = fields.Char(string="Name", required=True)
-    tmdb_genre_id = fields.Integer(string="TMDB Genre ID", required=True, unique=True)
+    tmdb_genre_id = fields.Integer(string="TMDB Genre ID", required=True)
     description = fields.Text(string="Description")
 
     # Relationships
