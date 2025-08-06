@@ -170,8 +170,14 @@ class TMDBMovie(models.Model):
                 return []
 
             actor_ids = []
-            # Process only first 10 actors
-            for cast_member in credits_data.get("cast", [])[:10]:
+            # Sort cast by popularity and take top 10 actors
+            cast_members = credits_data.get("cast", [])
+            # Sort by popularity (descending) and take top 10
+            sorted_cast = sorted(
+                cast_members, key=lambda x: x.get("popularity", 0), reverse=True
+            )[:10]
+
+            for cast_member in sorted_cast:
                 actor_name = cast_member.get("name")
                 if actor_name:
                     # Find or create actor contact
@@ -308,14 +314,40 @@ class TMDBMovie(models.Model):
                 "danger",
             )
 
-    def sync_all_directors_to_contacts(self):
-        """Sync all directors from movies to contacts"""
+    def sync_all_contacts(self):
+        """Sync all directors and actors from movies to contacts"""
         # Get all movies to sync
         all_movies = self.search([])
-        synced_count = super().sync_all_directors_to_contacts(all_movies)
+
+        # Sync directors
+        director_count = super().sync_all_directors_to_contacts(all_movies)
+
+        # Sync actors
+        actor_count = self._sync_all_actors_to_contacts(all_movies)
+
+        total_count = director_count + actor_count
         return self.get_notification(
-            "Success", f"Synced {synced_count} directors to contacts.", "success"
+            "Success",
+            f"Synced {director_count} directors and {actor_count} actors to contacts ({total_count} total).",
+            "success",
         )
+
+    def _sync_all_actors_to_contacts(self, movie_records):
+        """Sync all actors from movies to contacts"""
+        synced_count = 0
+
+        for movie in movie_records:
+            try:
+                # Process actors for this movie if it has TMDB ID
+                if movie.tmdb_id:
+                    actor_ids = self._process_actors_info(movie.tmdb_id)
+                    if actor_ids:
+                        movie.write({"actor_ids": [(6, 0, actor_ids)]})
+                        synced_count += len(actor_ids)
+            except Exception as e:
+                _logger.error(f"Error syncing actors for movie {movie.title}: {e}")
+
+        return synced_count
 
     def create_director_contact_from_field(self):
         """Create director contact from the director field"""

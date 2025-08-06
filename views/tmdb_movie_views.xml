@@ -128,13 +128,13 @@
             <field name="context">{}</field>
         </record>
 
-        <!-- Sync All Directors Action -->
-        <record id="action_sync_all_directors" model="ir.actions.server">
-            <field name="name">Sync All Directors to Contacts</field>
+        <!-- Sync All Contacts Action -->
+        <record id="action_sync_all_contacts" model="ir.actions.server">
+            <field name="name">Sync Contacts</field>
             <field name="model_id" ref="model_tmdb_movie"/>
             <field name="state">code</field>
             <field name="code">
-                action = model.sync_all_directors_to_contacts()
+                action = model.sync_all_contacts()
             </field>
         </record>
 
@@ -150,10 +150,10 @@
                   action="action_tmdb_movie" 
                   sequence="10"/>
 
-        <menuitem id="menu_tmdb_sync_directors" 
-                  name="Sync Directors to Contacts" 
+        <menuitem id="menu_tmdb_sync_contacts" 
+                  name="Sync Contacts" 
                   parent="menu_tmdb_root" 
-                  action="action_sync_all_directors" 
+                  action="action_sync_all_contacts" 
                   sequence="20"/>
 
         <menuitem id="menu_tmdb_cleanup" 
