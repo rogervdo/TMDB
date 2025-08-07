@@ -61,10 +61,16 @@
                             <field name="overview" placeholder="Movie overview..."/>
                         </group>
                         <group>
-                            <field name="poster_path"/>
-                            <field name="backdrop_path"/>
-                            <field name="last_sync"/>
-                            <field name="genre_ids" widget="many2many_tags"/>
+                            <group string="Cast and Crew">
+                                <field name="director_id" options="{'no_create': True}" readonly="1"/>
+                                <field name="actor_ids" widget="many2many_tags" options="{'no_create': True, 'clickable': True}" readonly="1"/>
+                                <field name="total_actors" readonly="1"/>
+                            </group>
+                            <group string="Classification">
+                                <field name="genre_ids" widget="many2many_tags" readonly="1"/>
+                                <field name="age_category" readonly="1"/>
+                                <field name="popularity_category" readonly="1"/>
+                            </group>
                         </group>
                     </sheet>
                 </form>
@@ -107,7 +113,7 @@
         <record id="action_tmdb_movie" model="ir.actions.act_window">
             <field name="name">TMDB Movies</field>
             <field name="res_model">tmdb.movie</field>
-            <field name="view_mode">list,form</field>
+            <field name="view_mode">kanban,list,form</field>
             <field name="context">{'search_default_active': 1}</field>
             <field name="help" type="html">
                 <p class="o_view_nocontent_smiling_face">
@@ -118,6 +124,48 @@
                 </p>
             </field>
         </record>
+
+        <!-- TMDB Kanban View -->
+        <record id="view_tmdb_movie_kanban" model="ir.ui.view">
+            <field name="name">tmdb.movie.kanban</field>
+            <field name="model">tmdb.movie</field>
+            <field name="arch" type="xml">
+                <kanban>
+                    <field name="id"/>
+                    <field name="title"/>
+                    <field name="poster_path"/>
+                    <field name="vote_average"/>
+                    <field name="popularity_category"/>
+                    <field name="director"/>
+                    <templates>
+                        <t t-name="kanban-box">
+                            <div class="oe_kanban_card">
+                                <!-- Foto de la película -->
+                                <div class="oe_kanban_image">
+                                    <img t-att-src="'https://image.tmdb.org/t/p/w500' + record.poster_path.raw_value" 
+                                         t-if="record.poster_path and record.poster_path.raw_value"
+                                         style="max-width: 150px; max-height: 225px;"/>
+                                    <div t-if="!record.poster_path or !record.poster_path.raw_value" 
+                                         class="oe_kanban_image_placeholder"
+                                         style="width: 150px; height: 225px; background-color: #f0f0f0; display: flex; align-items: center; justify-content: center;">
+                                        <span style="color: #999;">🎬 No Image</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Información épica -->
+                                <div class="oe_kanban_details">
+                                    <strong><field name="title"/></strong><br/>
+                                    <span>⭐ <field name="vote_average"/></span>
+                                    <span>🔥 <field name="popularity_category"/></span><br/>
+                                    <span>🎬 <field name="director"/></span><br/>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+
 
         <!-- Action button for Data Cleanup -->
         <record id="action_tmdb_cleanup_from_movies" model="ir.actions.act_window">

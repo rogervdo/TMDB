@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Vista heredada para info cinematografica -->
+        <record id= "view_partner_form_movie_inherit" model="ir.ui.view">
+            <field name="name">res.partner.form.movie.inherit</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_partner_form" />
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='category_id']" position="after">
+                    <group string="Información Cinematografica" invisible="not is_director and not is_actor">
+                        <field name="is_director"/> 
+                        <field name="is_actor"/>
+                        <field name="total_directed_movies" invisible="not is_director" readonly="1"/>
+                        <field name="total_acted_movies" invisible="not is_actor" readonly="1"/>
+                    </group>
+                </xpath>
+
+                <xpath expr="//page[@name='internal_notes']" position="before">
+                    <page string="Filmografía" invisible="not is_director and not is_actor">
+                        <group string="Como Director" invisible="not is_director">
+                            <field name="directed_movies_ids" nolabel="1">
+                                <list>
+                                    <field name="title"/>
+                                    <field name="release_date"/>
+                                    <field name="vote_average"/>
+                                    <field name="genre_ids" widget="many2many_tags"/>
+                                </list>
+                            </field>
+                        </group>
+                        <group string="Como Actor" invisible="not is_actor">
+                            <field name="acted_movies_ids" nolabel="1">
+                                <list>
+                                    <field name="title"/>
+                                    <field name="release_date"/>
+                                    <field name="vote_average"/>
+                                    <field name="genre_ids" widget="many2many_tags"/>
+                                </list>
+                            </field>
+                        </group>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
