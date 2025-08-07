@@ -170,18 +170,21 @@ class TMDBMovie(models.Model):
                 return []
 
             actor_ids = []
-            # Sort cast by popularity and take top 10 actors
+            # Sort cast by popularity and take top 5 actors
             cast_members = credits_data.get("cast", [])
-            # Sort by popularity (descending) and take top 10
+            # Sort by popularity (descending) and take top 5
             sorted_cast = sorted(
                 cast_members, key=lambda x: x.get("popularity", 0), reverse=True
-            )[:10]
+            )[:5]
 
             for cast_member in sorted_cast:
                 actor_name = cast_member.get("name")
+                profile_path = cast_member.get("profile_path")
                 if actor_name:
-                    # Find or create actor contact
-                    actor_contact = self.find_or_create_actor_contact(actor_name)
+                    # Find or create actor contact with profile image
+                    actor_contact = self.find_or_create_actor_contact(
+                        actor_name, profile_path
+                    )
                     if actor_contact:
                         actor_ids.append(actor_contact.id)
 
@@ -218,7 +221,7 @@ class TMDBMovie(models.Model):
             _logger.error(f"Error fetching popular movies: {e}")
             return 0
 
-    def find_or_create_actor_contact(self, actor_name):
+    def find_or_create_actor_contact(self, actor_name, profile_path=None):
         if not actor_name:
             return None
 
@@ -228,7 +231,11 @@ class TMDBMovie(models.Model):
         )
 
         if existing_actor:
+            # Update image if we have a profile_path and the contact doesn't have an image yet
+            if profile_path and not existing_actor.image_1920:
+                existing_actor.update_image_from_tmdb_profile(profile_path)
             return existing_actor
+
         # Crear nuevo actor
         try:
             actor_vals = {
@@ -237,7 +244,13 @@ class TMDBMovie(models.Model):
                 "is_actor": True,
                 "function": "Actor",
             }
-            return self.env["res.partner"].create(actor_vals)
+            new_actor = self.env["res.partner"].create(actor_vals)
+
+            # Add profile image if available
+            if profile_path:
+                new_actor.update_image_from_tmdb_profile(profile_path)
+
+            return new_actor
         except Exception as e:
             _logger.error(f"Error creating actor contact for {actor_name}: {e}")
             return None
@@ -262,15 +275,15 @@ class TMDBMovie(models.Model):
             return None
 
     def get_director_from_credits(self, credits_data):
-        """Extract director name from credits data"""
+        """Extract director name and profile path from credits data"""
         if not credits_data or "crew" not in credits_data:
-            return None
+            return None, None
 
         for crew_member in credits_data["crew"]:
             if crew_member.get("job") == "Director":
-                return crew_member.get("name")
+                return crew_member.get("name"), crew_member.get("profile_path")
 
-        return None
+        return None, None
 
     def update_director_from_tmdb(self):
         """Update director information for this movie from TMDB"""
@@ -282,10 +295,12 @@ class TMDBMovie(models.Model):
         try:
             credits_data = self.fetch_movie_credits_from_tmdb(self.tmdb_id)
             if credits_data:
-                director = self.get_director_from_credits(credits_data)
+                director, director_profile_path = self.get_director_from_credits(
+                    credits_data
+                )
                 if director:
                     director_contact = self.find_or_create_director_contact_simple(
-                        director
+                        director, director_profile_path
                     )
                     self.write(
                         {
@@ -512,9 +527,13 @@ class TMDBMovie(models.Model):
         director_contact = None
         credits_data = self.fetch_movie_credits_from_tmdb(tmdb_id)
         if credits_data:
-            director = self.get_director_from_credits(credits_data)
+            director, director_profile_path = self.get_director_from_credits(
+                credits_data
+            )
             if director:
-                director_contact = self.find_or_create_director_contact_simple(director)
+                director_contact = self.find_or_create_director_contact_simple(
+                    director, director_profile_path
+                )
         return director, director_contact
 
     def _process_genres(self, genres_data):

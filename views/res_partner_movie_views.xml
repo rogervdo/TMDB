@@ -13,6 +13,12 @@
                         <field name="is_actor"/>
                         <field name="total_directed_movies" invisible="not is_director" readonly="1"/>
                         <field name="total_acted_movies" invisible="not is_actor" readonly="1"/>
+                        <field name="tmdb_profile_path" readonly="1" placeholder="TMDB profile image path"/>
+                        <button name="action_update_tmdb_image" 
+                                string="Update TMDB Image" 
+                                type="object" 
+                                class="btn-primary"
+                                invisible="not tmdb_profile_path"/>
                     </group>
                 </xpath>
 

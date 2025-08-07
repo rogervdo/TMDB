@@ -9,7 +9,7 @@ class TMDBContactUtils(models.AbstractModel):
     _description = "TMDB Contact Utilities"
 
     # De entrada tenemos: director_name
-    def find_or_create_director_contact_simple(self, director_name):
+    def find_or_create_director_contact_simple(self, director_name, profile_path=None):
         if not director_name:
             return None
 
@@ -21,6 +21,9 @@ class TMDBContactUtils(models.AbstractModel):
             )
 
             if existing_contact:
+                # Update image if we have a profile_path and the contact doesn't have an image yet
+                if profile_path and not existing_contact.image_1920:
+                    existing_contact.update_image_from_tmdb_profile(profile_path)
                 return existing_contact
 
             # Creamos nuevo director si no existe el contacto
@@ -32,13 +35,18 @@ class TMDBContactUtils(models.AbstractModel):
             }
 
             director_contact = self.env["res.partner"].create(contact_vals)
+
+            # Add profile image if available
+            if profile_path:
+                director_contact.update_image_from_tmdb_profile(profile_path)
+
             return director_contact
 
         except Exception as e:
             _logger.error(f"Error creating director contact for {director_name}: {e}")
             return None
 
-    def find_or_create_director_contact(self, director_name):
+    def find_or_create_director_contact(self, director_name, profile_path=None):
         """Find existing director contact or create a new one"""
         if not director_name:
             return None
@@ -57,6 +65,9 @@ class TMDBContactUtils(models.AbstractModel):
                 # Asegurar que el contacto existente esté marcado como director
                 if not existing_contact.is_director:
                     existing_contact.write({"is_director": True})
+                # Update image if we have a profile_path and the contact doesn't have an image yet
+                if profile_path and not existing_contact.image_1920:
+                    existing_contact.update_image_from_tmdb_profile(profile_path)
                 return existing_contact
 
             # Create new director contact with safe field handling
@@ -86,13 +97,19 @@ class TMDBContactUtils(models.AbstractModel):
 
             director_contact = self.env["res.partner"].create(contact_vals)
 
+            # Add profile image if available
+            if profile_path:
+                director_contact.update_image_from_tmdb_profile(profile_path)
+
             return director_contact
 
         except Exception as e:
             _logger.error(f"Error creating director contact for {director_name}: {e}")
             _logger.info("Trying simple contact creation without categories...")
             # Fallback to simple contact creation without categories
-            return self.find_or_create_director_contact_simple(director_name)
+            return self.find_or_create_director_contact_simple(
+                director_name, profile_path
+            )
 
     def _validate_contact_creation(self, director_name):
         """Validate if we can create a contact for this director"""
